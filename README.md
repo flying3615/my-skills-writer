@@ -12,6 +12,10 @@
 - **功能**: 自动从用户提供的链接中提取视频并以指定名称保存。
 - **依赖**: 需要安装 [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE)。
 
+### 3. [News Summarizer](./news-summarizer/SKILL.md)
+每日新闻聚合与翻译工具。
+- **功能**: 自动采集新西兰、国际及市场新闻，并提供中文摘要与链接。
+
 ## 目录结构
 
 ```text
@@ -19,10 +23,12 @@
 ├── README.md
 ├── skill-writer/        # Skill 编写规范
 │   └── SKILL.md
-└── video-downloader/    # 视频下载工具
-    ├── SKILL.md
-    └── scripts/
-        └── download.sh
+├── video-downloader/    # 视频下载工具
+│   ├── SKILL.md
+│   └── scripts/
+│       └── download.sh
+└── news-summarizer/     # 新闻摘要工具
+    └── SKILL.md
 ```
 
 ## 如何贡献
