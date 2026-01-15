@@ -38,5 +38,6 @@ nre "https://example.com/movie.m3u8" --save-name "我的电影" --thread-count 1
 
 ## 注意事项
 
-- 确保 `nre` 工具在环境中已安装并可调用。
-- 处理电影名称中的特殊字符或空格，确保在命令中正确引用。
+- **工具要求**：确保 `nre` 工具在环境中已安装并可调用。
+- **安装引导**：如果系统未安装 `nre` (N_m3u8DL-RE)，请指导用户前往 [N_m3u8DL-RE GitHub 仓库](https://github.com/nilaoda/N_m3u8DL-RE) 查看安装和使用说明。
+- **名称处理**：处理电影名称中的特殊字符或空格，确保在命令中正确引用。
