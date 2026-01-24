@@ -19,7 +19,7 @@
 ### 4. [Stock Value Scanner](./stock-value-scanner/SKILL.md)
 股票价值投资分析与实时股价查询工具。
 - **功能**: 
-  - **价值分析**: 基于 Alpha Vantage API 分析股票估值（P/B, P/E, ROE）。
+  - **价值分析**: 基于 Yahoo Finance (yfinance) 分析股票估值（P/B, P/E, ROE）。
   - **股价查询**: 实时查询美股最新价格与涨跌幅（Yahoo Finance，无需 Key）。
 
 ## 目录结构

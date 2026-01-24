@@ -1,7 +1,7 @@
 # Stock Value Scanner Skill
 
 ## Description
-这是一个基于价值投资逻辑的股票自动扫描工具。它利用 Alpha Vantage API 获取实时财务数据（P/B, P/E, ROE 等），并自动计算评分，判断该股票是否属于“价值洼地”或“高成长股”。
+这是一个基于价值投资逻辑的股票自动扫描工具。它利用 Yahoo Finance 获取实时财务数据（P/B, P/E, ROE 等），并自动计算评分，判断该股票是否属于“价值洼地”或“高成长股”。
 
 ## Features
 - **实时估值分析**：自动获取 P/B, P/E, PEG 等核心估值指标 (Yahoo Finance)。
