@@ -1,13 +1,13 @@
 ---
 name: stock-value-scanner
-description: 进行股票价值投资分析与趋势查询
+description: 进行股票异动，价值投资分析与趋势查询
 ---
 
 # Stock Value Scanner Skill
 
 
 ## Description
-这是一个基于价值投资逻辑的股票自动扫描工具。它利用 Yahoo Finance 获取实时财务数据（P/B, P/E, ROE 等），并自动计算评分，判断该股票是否属于“价值洼地”或“高成长股”。
+这是一个综合性的美股分析工具。它集成了**价值投资评分**（基于 Yahoo Finance 的 P/E, ROE 等指标）、**趋势技术分析**（历史回撤、均线判断）以及**市场异动扫描**（涨跌幅榜、热门交易）。无论是寻找被低估的优质股，还是追踪市场的热点趋势，此 Skill 都能提供数据支持。
 
 ## Features
 - **实时估值分析**：自动获取 P/B, P/E, PEG 等核心估值指标 (Yahoo Finance)。

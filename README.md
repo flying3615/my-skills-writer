@@ -20,8 +20,8 @@
 股票价值投资分析与实时股价查询工具。
 - **功能**: 
   - **价值分析**: 基于 Yahoo Finance (yfinance) 分析股票估值（P/B, P/E, ROE）。
-
   - **趋势分析**: 分析历史高点回撤、52周幅度及长期均线趋势。
+  - **市场异动**: 实时查看美股涨幅榜、跌幅榜及热门交易股。
 
 ## 目录结构
 
@@ -40,7 +40,9 @@
     ├── SKILL.md
     └── scripts/
         ├── scanner.py
-        └── stock_price.py
+        ├── scanner.py
+        ├── stock_price.py
+        └── market_movers.py
 ```
 
 ## 如何贡献
