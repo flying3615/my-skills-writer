@@ -38,5 +38,9 @@ python3 .gemini/skills/stock-value-scanner/stock_price.py [SYMBOL]
 ```
 
 ## Tips for the Agent
+## Tips for the Agent
+- **场景区分**:
+  - 用户问 **“值不值得买”、“基本面”、“估值”** -> 使用 `scanner.py`。
+  - 用户问 **“趋势”、“走势”、“历史高点”、“回撤”、“均线”** -> 使用 `stock_price.py`。
 - 遇到 `ImportError: No module named 'yfinance'` 错误时，请指导用户运行 `pip install yfinance`。
-- 运行结果是文本报告，直接展示给用户即可，无需过度解释，除非用户有追问。
+- 运行结果是文本报告，直接展示给用户即可，无需过度解释。
