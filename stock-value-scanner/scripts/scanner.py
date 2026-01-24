@@ -1,6 +1,13 @@
 import sys
 import argparse
 import time
+import warnings
+
+# Suppress pandas/yfinance deprecation warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+# Catch specific text if category is custom or not easily imported without pandas
+warnings.filterwarnings("ignore", message=".*Timestamp.utcnow is deprecated.*")
+
 try:
     import yfinance as yf
 except ImportError:

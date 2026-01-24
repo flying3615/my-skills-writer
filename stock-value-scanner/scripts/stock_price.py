@@ -1,5 +1,11 @@
 import sys
 import argparse
+import warnings
+
+# Suppress pandas/yfinance deprecation warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", message=".*Timestamp.utcnow is deprecated.*")
+
 try:
     import yfinance as yf
 except ImportError:
