@@ -1,4 +1,10 @@
+---
+name: stock-value-scanner
+description: 使用 Yahoo Finance 进行股票价值投资分析与趋势查询。
+---
+
 # Stock Value Scanner Skill
+
 
 ## Description
 这是一个基于价值投资逻辑的股票自动扫描工具。它利用 Yahoo Finance 获取实时财务数据（P/B, P/E, ROE 等），并自动计算评分，判断该股票是否属于“价值洼地”或“高成长股”。
@@ -37,7 +43,6 @@ python3 .gemini/skills/stock-value-scanner/scanner.py --scan
 python3 .gemini/skills/stock-value-scanner/stock_price.py [SYMBOL]
 ```
 
-## Tips for the Agent
 ## Tips for the Agent
 - **场景区分**:
   - 用户问 **“值不值得买”、“基本面”、“估值”** -> 使用 `scanner.py`。
