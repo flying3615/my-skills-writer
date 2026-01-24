@@ -5,7 +5,7 @@
 
 ## Features
 - **实时估值分析**：自动获取 P/B, P/E, PEG 等核心估值指标 (Yahoo Finance)。
-- **实时股价查询**：获取最新股价与涨跌幅。
+- **股价趋势分析**：查看收盘价、历史高点回撤、52周范围及长期均线趋势。
 - **质量体检**：自动检测 ROE, 净利率等质量指标，排除“垃圾股”。
 - **智能打分**：基于巴菲特价值投资逻辑生成 0-6 分的综合评分。
 
@@ -17,7 +17,8 @@
 
 ### Example Prompts
 - "分析一下 MARA 的投资价值"
-- "看看 AAPL 现在多少钱"
+- "看看 AAPL 最近的走势怎么样"
+- "查询 NVDA 离历史高点还有多远"
 - "扫描科技巨头的估值情况" (使用 `--scan` 参数)
 
 ## Execution
@@ -31,7 +32,7 @@ python3 .gemini/skills/stock-value-scanner/scanner.py [SYMBOL]
 python3 .gemini/skills/stock-value-scanner/scanner.py --scan
 ```
 
-### 2. 纯股价查询
+### 2. 股价趋势查询
 ```bash
 python3 .gemini/skills/stock-value-scanner/stock_price.py [SYMBOL]
 ```
