@@ -16,6 +16,12 @@
 每日新闻聚合与翻译工具。
 - **功能**: 自动采集新西兰、国际及市场新闻，并支持针对用户指定主题执行深度搜索，提供中文摘要与链接。
 
+### 4. [Stock Value Scanner](./stock-value-scanner/SKILL.md)
+股票价值投资分析与实时股价查询工具。
+- **功能**: 
+  - **价值分析**: 基于 Alpha Vantage API 分析股票估值（P/B, P/E, ROE）。
+  - **股价查询**: 实时查询美股最新价格与涨跌幅（Yahoo Finance，无需 Key）。
+
 ## 目录结构
 
 ```text
@@ -29,6 +35,10 @@
 │       └── download.sh
 └── news-summarizer/     # 新闻摘要工具
     └── SKILL.md
+└── stock-value-scanner/ # 股票价值分析工具
+    ├── SKILL.md
+    ├── scanner.py
+    └── stock_price.py
 ```
 
 ## 如何贡献
