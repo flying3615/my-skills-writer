@@ -23,6 +23,19 @@
   - **趋势分析**: 分析历史高点回撤、52周幅度及长期均线趋势。
   - **市场异动**: 实时查看美股涨幅榜、跌幅榜及热门交易股。
 
+### 5. [Daily Press Scanner](./daily-press-scanner/SKILL.md)
+扫描多份当日报纸 PDF URL 的 OCR 索引工具，附带本地可执行扫描脚本。
+- **功能**:
+  - **快扫索引**: 对扫描报纸做页级 OCR 快扫，快速识别标题、首段和主题。
+  - **评论优先**: 优先找 `Opinion / Editorial / Analysis / Column / Review` 候选文章。
+  - **主题命中**: 按用户关心的话题输出结构化 JSON，如关税、AI、中国、Fed、中东等。
+- **运行要求**: 需要 `python3`、`pdftoppm`、`tesseract`，可选 `pypdf` 和 `Pillow`。
+- **执行方式**:
+   ```bash
+   python3 daily-press-scanner/scripts/scan.py --urls urls.txt --out-dir ./out --topics tariffs,ai --max-pages 8
+   ```
+- **主题参数**: 不传 `--topics` 时使用默认主题集；传入后只扫描指定主题。
+
 ## 目录结构
 
 ```text
@@ -34,15 +47,18 @@
 │   ├── SKILL.md
 │   └── scripts/
 │       └── download.sh
-└── news-summarizer/     # 新闻摘要工具
-    └── SKILL.md
-└── stock-value-scanner/ # 股票价值分析工具
+├── news-summarizer/     # 新闻摘要工具
+│   └── SKILL.md
+├── stock-value-scanner/ # 股票价值分析工具
+│   ├── SKILL.md
+│   └── scripts/
+│       ├── scanner.py
+│       ├── stock_price.py
+│       └── market_movers.py
+└── daily-press-scanner/ # 报纸 OCR 快扫与评论/热点索引工具
     ├── SKILL.md
     └── scripts/
-        ├── scanner.py
-        ├── scanner.py
-        ├── stock_price.py
-        └── market_movers.py
+        └── scan.py
 ```
 
 ## 如何贡献
