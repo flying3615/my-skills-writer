@@ -1,0 +1,2 @@
+name: NotebookLM Exporter
+description: Manage NotebookLM readiness, notebooks, sources, artifacts, generation, and downloads through wrapper scripts.
