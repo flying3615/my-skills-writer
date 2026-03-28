@@ -1,293 +1,321 @@
 ---
 name: daily-press-scanner
-description: Use when scanning batches of newspaper PDF URLs to find opinion pieces, commentary, or topic-specific stories from OCR-only pages and return structured JSON.
+description: Use when processing translated Chinese newspaper PDF URLs into extracted text, article candidates, and summary artifacts for daily automation.
 ---
 
 # Daily Press Scanner Skill
 
-这个 Skill 用于处理一组**当日报纸 PDF URL**，在大多数页面没有文字层、只能依赖 OCR 的前提下，快速找出：
+这个 Skill 现在的主目标已经不是“对英文扫描报纸做 OCR 快扫”，而是处理一组**中文版机器翻译报纸 PDF**，优先利用 PDF 自带的中文文字层，生成：
 
-- 评论员文章
-- 社论、分析、专栏、书评
-- 用户指定热门主题对应的新闻页或文章
+- 可复用的页级文本产物
+- 结构化 `article_candidates`
+- 每份报纸 `5-10` 篇重点条目的本地 summary contract
 
-默认目标不是还原整份报纸，而是先输出**结构化 JSON 索引**，方便后续人工筛选、深度摘要、脚本改写或别的工作流消费。
+它适合给后续 Codex 自动化当作每日输入准备层，不要求完美还原原版文章，也不默认追求跨页拼接。
+
+## 当前实现重点
+
+当前脚本已经支持这条主路径：
+
+1. 固定 URL 模板 + 日期展开
+2. 下载中文版 PDF
+3. 检测并提取文字层
+4. 写出页级 text artifacts
+5. 从页级中文文本生成 `article_candidates`
+6. 本地规则筛出每份报纸的重点条目
+7. 写出 `summary.json` / `summary.md`
+
+旧的 OCR 扫描能力仍然存在，但对 translated PDF 来说已经不是默认优化方向。
 
 ## 可执行脚本
 
-这个 Skill 自带一个纯本地扫描脚本：
+```bash
+python3 daily-press-scanner/scripts/scan.py \
+  --source-config translated-press-scanner/configs/sources.example.json \
+  --out-dir ./out \
+  --run-date 2026-03-27
+```
+
+也仍然兼容旧的 `--urls` 输入：
 
 ```bash
 python3 daily-press-scanner/scripts/scan.py \
   --urls urls.txt \
-  --out-dir ./out \
-  --topics tariffs,ai,china,fed,war,markets \
-  --max-pages 12 \
-  --dpi 200
+  --out-dir ./out
 ```
 
-### 运行前提
+## 运行前提
 
 - `python3`
-- `pdftoppm`
-- `tesseract`
-- 可选：`pypdf`、`Pillow`
+- `pdftotext`
+- 旧 OCR 路径相关依赖在需要时仍会用到：
+  - `pdftoppm`
+  - `tesseract`
+- 可选：
+  - `pypdf`
+  - `Pillow`
 
-### 输入文件格式
+## 推荐输入方式
 
-`--urls` 指向一个文本文件，每行一条 PDF URL 或本地路径。支持：
+推荐用 `--source-config`，因为这更适合每日自动化。
 
-- `https://.../paper.pdf`
-- `file:///.../paper.pdf`
-- `/absolute/path/to/paper.pdf`
+示例配置：
 
-空行和以 `#` 开头的行会被忽略。
+```json
+{
+  "sources": [
+    {
+      "source_name": "New York Times",
+      "url_template": "https://dl.dengtazk.xin/%E3%80%90%E8%AF%91%E3%80%91%E7%BA%BD%E7%BA%A6%E6%97%B6%E6%8A%A5-{month}-{day}.pdf",
+      "enabled": true
+    }
+  ]
+}
+```
 
-`--topics` 的语义是：
+支持的占位符：
 
-- 不传：使用脚本内置默认主题集
-- 传入：只扫描你指定的主题，不再附带默认全集
+- `{month}`
+- `{day}`
+- `{year}`
+- `{date}`
 
-### 输出目录
+如果不传 `--run-date`，默认使用当天日期。
+
+## 输出目录
 
 脚本会在 `--out-dir` 下写出：
 
 ```text
 out/
   results.json
+  articles.json
+  summary.json
+  summary.md
+  daily_brief.json
   pdfs/
+  text/
   ocr/
   previews/
 ```
 
-- `results.json` 是主输出，供后续助手消费。
-- `pdfs/` 保存下载后的 PDF。
-- `ocr/` 保存逐页 OCR 原文。
-- `previews/` 保存逐页渲染图和摘要文本。
+重点产物说明：
 
-### 消费原则
+- `results.json`
+  - 主运行产物，包含 papers、page_index、errors、article candidates、summary contract
+- `articles.json`
+  - 给后续 AI 或自动化消费的 article candidates 扁平列表
+- `summary.json`
+  - 每份报纸的重点条目摘要 contract
+- `summary.md`
+  - 人类直接阅读版
+- `daily_brief.json`
+  - 给每日 Codex 自动化消费的扁平摘要 payload
+- `text/`
+  - 成功提取的页级文字层文本，路径类似 `text/<paper_slug>/page-001.txt`
 
-当脚本已经生成 `results.json` 时，助手应优先读取 JSON，而不是再次对 PDF 做重复 OCR。
-这个脚本本身不调用远程 AI，也不做中文摘要生成；这些解释和筛选动作应由使用该 skill 的助手基于 `results.json` 完成。
+## 核心策略
+
+### 1. Text Layer First
+
+对 translated PDF，优先跑 `pdftotext`。
+
+- 如果文字层可用，写出页级 `text_path`
+- 如果文字层是明显的中文译文内容，直接走 text-layer fast path，不再跑整页 render/OCR/review
+- 如果文字层不可用，记录 `text_layer_status` / `text_layer_reason`
+- OCR 只作为文字层不可用时的 fallback
+
+### 2. Article Candidates Before Summary
+
+不要直接拿整份 PDF 做总结。
+
+先从每页中文文本生成 `article_candidates`，每条至少包含：
+
+- `source_name`
+- `paper_id`
+- `url`
+- `page`
+- `title_guess`
+- `body_text`
+- `section_guess`
+- `topic_tags`
+- `importance_hints`
+- `text_path`
+
+当前实现不是跨页文章重建，但也不再是“整页一条”的粗粒度模式：
+
+- 前 `10` 页会优先使用 `pdftotext -bbox-layout` 的 block 坐标做 article-like block extraction
+- 如果 bbox 提取不可用，才退回 text-line 分块
+- 第 `11-30` 页仍保留页级 fallback
+- 如果前页分块失败，会自动退回页级 candidate
+
+### 3. Stable Summary Contract
+
+脚本当前不会调用远程 AI API。
+
+它会先用本地规则对 `article_candidates` 做排序和裁剪，保证每份报纸最终输出 `5-10` 条重点项，并写出：
+
+- `summary.json`
+- `summary.md`
+
+这样后续 Codex 自动化可以直接消费 summary contract，或者以后替换成真正的 AI 选择逻辑，而不需要改输出格式。
 
 ## 何时使用
 
 适合这些场景：
 
-- 用户一次给了多份报纸 PDF URL
-- PDF 大多是扫描件，没有文字层
-- 用户更关心 `Opinion / Editorial / Analysis / Column / Review`
-- 用户想快速找特定主题，例如关税、AI、中东、中国、Fed、市场
-- 用户需要 JSON 结果，而不是终端长篇摘要
+- 用户给了一组中文版报纸 PDF 链接
+- 用户想做每日自动化
+- 用户更关心“给 AI 一个干净输入”，而不是逐字忠实还原英文原版
+- 用户希望每份报纸得到 `5-10` 篇重点内容
 
 不适合这些场景：
 
-- 需要完整还原整份报纸全文
-- 需要精确拼接所有跨页续写文章
-- 需要直接生成视频成品
+- 需要原文级校对
+- 需要完整跨页拼接文章
+- 需要生成最终发布稿件
+- 需要依赖 OCR 还原没有文字层的原始英文扫描件作为主流程
 
-## 核心策略
+## 当前处理流程
 
-不要默认对所有页面做最重的 `OCR + AI 清洗 + 分篇`。
+### 1. Source Resolution
 
-采用两层处理：
+- 读取 `--source-config` 或 `--urls`
+- 如果是 config，按日期展开 URL 模板
+- 保留 `source_name` 和原始 source metadata
 
-1. `fast_scan`
-   - 对每页做轻量 OCR
-   - 只抓标题感文本、首段、数字、人名、国家、公司名
-   - 用于页级主题判断和评论页候选识别
+### 2. Download
 
-2. `selective_review`
-   - 只对命中的少量页面做进一步人工或助手层解读
-   - 脚本负责准备 OCR 原文和索引，不在脚本里接远程 AI
+- 下载 PDF 到 `pdfs/`
+- 失败写入 `errors`
+- 单份报纸失败不影响整批
 
-默认不纠结首页文章跳转到后页的续写问题。首页热门新闻通常不是主要目标；优先把资源放在评论页和特定热点上。
+### 3. Text Layer Extraction
 
-## 输入
+- 使用 `pdftotext`
+- 评估文字层是否可用
+- 成功时把每页文本写入 `text/`
+- 对中文译文文字层，直接从页级文本构建 `page_index`
 
-输入应是一组 PDF URL，例如：
+### 4. Candidate Generation
 
-```text
-https://example.com/financial-times-3-25.pdf
-https://example.com/new-york-times-3-25.pdf
-https://example.com/wall-street-journal-3-25.pdf
-```
+- 从 `text_path` 读取页级文本
+- 去掉明显版头、日期、天气、价格、服务指南、音频/视频导流等 page furniture
+- 前 `10` 页优先按 bbox blocks 聚合标题、作者和正文块
+- bbox 不可用时，再按标题行、作者行、正文密度做 text-line 分块
+- 生成更接近文章粒度的 `article_candidates`
 
-可附带：
+### 5. Local Summary Contract
 
-- 关注主题列表，例如：`tariffs, ai, china, fed, war, markets`
-- 需要优先查找的栏目，例如：`opinion, editorial, analysis, review`
-- 每份报纸最多快扫多少页
+- 对 candidates 打分
+- 每份报纸裁到最多 `10` 条
+- 写出 `summary.json`、`summary.md` 和 `daily_brief.json`
 
-推荐执行方式：
+## 主要字段
 
-```bash
-python3 daily-press-scanner/scripts/scan.py \
-  --urls urls.txt \
-  --out-dir ./out \
-  --topics tariffs,ai \
-  --max-pages 8
-```
+### `paper`
 
-## 输出
+每份报纸的摘要元信息包含：
 
-输出应是单个 `results.json`，而不是自然语言大段描述。
+- `source_name`
+- `paper_id`
+- `url`
+- `status`
+- `text_layer_status`
+- `text_layer_reason`
+- `text_layer_score`
+- `text_layer_dir`
+- `text_layer_page_count`
+- `article_count`
+- `scan_mode`
 
-建议结构：
+### `page_index`
+
+页级索引仍然保留，尤其是为了兼容旧扫描流程。对 translated 路径，重点字段是：
+
+- `page`
+- `text_path`
+- `preview_path`
+- `ocr_path`
+
+### `article_candidates`
+
+这是后续自动化最应该优先消费的中间层。
+
+当前会额外带一些结构字段，便于本地排序：
+
+- `block_index`
+- `block_kind`
+- `source_page_rank`
+
+### `summary.json`
+
+每份报纸大致形如：
 
 ```json
 {
-  "run_date": "2026-03-26",
-  "inputs": [
-    "https://example.com/financial-times-3-25.pdf"
-  ],
+  "run_date": "2026-03-27",
   "papers": [
     {
-      "source_name": "Financial Times",
-      "url": "https://example.com/financial-times-3-25.pdf",
-      "page_count": 24,
-      "status": "ok"
+      "source_name": "New York Times",
+      "paper_id": "nyt-2026-03-27",
+      "article_count": 14,
+      "selected_count": 8,
+      "selected_articles": [
+        {
+          "page": 1,
+          "title_guess": "战争冲击波引发滞胀阴影",
+          "summary_text": "..."
+        }
+      ]
     }
   ],
-  "page_index": [
-    {
-      "source_name": "Financial Times",
-      "page": 3,
-      "title": "Brittin will need luck as well as talent to steer embattled BBC",
-      "snippet": "..."
-    }
-  ],
-  "opinion_candidates": [
-    {
-      "source_name": "Financial Times",
-      "page": 3,
-      "title": "Brittin will need luck as well as talent to steer embattled BBC",
-      "section_guess": "Analysis",
-      "snippet": "Former Google executive faces tough policy and political challenges...",
-      "topic_tags": [],
-      "confidence": 0.82
-    }
-  ],
-  "topic_hits": [
-    {
-      "source_name": "Financial Times",
-      "page": 2,
-      "topic": "inflation",
-      "title": "Inflation fallout",
-      "snippet": "Businesses call for energy policy changes...",
-      "score": 0.78
-    }
-  ],
-  "errors": []
+  "articles": []
 }
 ```
 
-## 操作流程
+### `daily_brief.json`
 
-### 1. 下载 PDF
+这个文件是为了自动化消费而加的更扁平版本。每份报纸只保留：
 
-- 下载所有 URL
-- 记录下载失败到 `errors`
-- 不因单份报纸失败而中断整批任务
+- `source_name`
+- `paper_id`
+- `selected_count`
+- `articles`
 
-### 2. 页级 OCR 快扫
+每篇文章最少包含：
 
-对每份报纸逐页处理，但默认限制在一个合理页数范围内，例如前 `8-12` 页。第一版脚本不会自动补扫后续评论区页面；如果需要扩大范围，请显式调高 `--max-pages`。
-
-快扫时：
-
-- 优先识别页面主标题
-- 抽取首段前几行
-- 记录明显数字、人物、公司、国家
-- 给出粗粒度主题标签
-
-### 3. 评论页识别
-
-优先找这些信号：
-
-- 页眉或栏目中出现：
-  - `Opinion`
-  - `Editorial`
-  - `Analysis`
-  - `Column`
-  - `Review`
-  - `Books`
-  - `Comment`
-- 标题风格明显像专栏或评论
-- 作者行 `By ...` 比较清晰
-
-### 4. 热点主题匹配
-
-根据用户给定主题做匹配，不要求全文精读。
-
-主题匹配可基于：
-
-- 标题命中
-- 首段命中
-- 命名实体命中
-- 数字和关键短语
-
-例如：
-
-- `tariffs`: tariff, trade, duty, import, export
-- `fed`: inflation, rates, Powell, Federal Reserve
-- `china`: Beijing, China, Xi, property, yuan
-- `war`: missile, strike, Gaza, Ukraine, Iran, Israel
-- `ai`: artificial intelligence, chip, Nvidia, OpenAI, model
-
-### 5. 命中页复查
-
-仅对这些页面进入复查：
-
-- 评论候选页
-- 高分 topic hit 页
-
-复查目标：
-
-- 标题
-- 栏目
-- OCR 原文是否可读
-- 主题标签
-
-如果页面过于脏乱，允许只保留：
-
-- `title`
 - `page`
-- `snippet`
-- `matched_terms`
+- `title`
+- `summary_text`
+- `topic_tags`
+- `text_path`
 
-不要为了追求完美而卡死整批流程。
+## 消费原则
 
-## 处理规则
-
-- OCR-only 页面也先做快扫，不要默认重型清洗
-- 首页续写问题默认弱化处理，不作为第一版主目标
-- 评论候选优先级高于普通新闻页
-- 热点新闻只要足够判断主题即可，不要求完整还原全文
-- 输出要结构化、可复用、可缓存
+- 对 translated PDF，优先看 `articles.json` 和 `summary.json`
+- 不要优先回退到 OCR 文本
+- 如果 `text_layer_status` 是 `available`，优先使用 `text_path`
+- 如果要接真正的 AI，总结层应该读 `article_candidates` 或 `summary.json`，而不是重新下载和重新抽取 PDF
 
 ## 错误处理
 
-必须把失败写进 `errors`：
+失败必须写进 `errors`：
 
 - 下载失败
-- OCR 失败
-- 页内容过脏无法判断
+- `pdftotext` 不可用
+- 文字层为空
+- 文字层过稀疏
+- 页级处理失败
 
-错误只影响当前 PDF 或当前页，不影响整个批次。
-
-## 示例提示词
-
-- `扫描这 4 份报纸 PDF URL，优先找 opinion 和 analysis，输出 JSON。`
-- `从这些日报里找跟 tariffs、China、AI 相关的话题页，返回结构化结果。`
-- `只提取评论员文章，不要跑完整报纸全文清洗。`
+错误按 paper 或 page 隔离，不影响整批运行。
 
 ## 非目标
 
-第一版默认不做：
+当前版本默认不做：
 
-- 全报纸逐篇全文还原
-- 完整跨页文章拼接
-- 视频脚本生成
-- 上传或内容生产
-- GUI 或网页展示
+- 自动跨页拼接
+- 精确文章版面重建
+- 远程 AI 直接集成进脚本
+- 英文原文对齐
+- 以 OCR 为主的 translated PDF 流程
