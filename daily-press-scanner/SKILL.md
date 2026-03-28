@@ -46,14 +46,23 @@ python3 daily-press-scanner/scripts/scan.py \
 
 ## 运行前提
 
+主流程必需：
+
 - `python3`
 - `pdftotext`
-- 旧 OCR 路径相关依赖在需要时仍会用到：
-  - `pdftoppm`
-  - `tesseract`
-- 可选：
-  - `pypdf`
-  - `Pillow`
+  这通常来自 `poppler`，也是当前 translated PDF 文字层提取的关键依赖。
+
+OCR fallback 可选：
+
+- `pdftoppm`
+  也通常来自 `poppler`，只在回退到旧 OCR 路径时需要。
+- `tesseract`
+  当前脚本里的 OCR 仍是英文模型路径，主要用于没有文字层的旧扫描流程。
+
+其他可选 Python 依赖：
+
+- `pypdf`
+- `Pillow`
 
 ## 推荐输入方式
 
