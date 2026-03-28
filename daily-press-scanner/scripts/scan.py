@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import xml.etree.ElementTree as ET
 from collections import Counter
 from datetime import date
@@ -550,6 +551,213 @@ def compact_text(text: str) -> str:
 
 def count_cjk_chars(text: str) -> int:
     return sum(1 for ch in text if "\u4e00" <= ch <= "\u9fff")
+
+
+def normalize_article_title(title: str) -> str:
+    normalized = unicodedata.normalize("NFKC", title or "")
+    translation = str.maketrans(
+        {
+            "“": '"',
+            "”": '"',
+            "„": '"',
+            "‟": '"',
+            "‘": "'",
+            "’": "'",
+            "‚": "'",
+            "‛": "'",
+            "：": ":",
+            "，": ",",
+            "；": ";",
+            "？": "?",
+            "！": "!",
+            "（": "(",
+            "）": ")",
+            "【": "[",
+            "】": "]",
+            "《": "<",
+            "》": ">",
+            "—": "-",
+            "–": "-",
+            "―": "-",
+            "…": "...",
+        }
+    )
+    normalized = normalized.translate(translation)
+    normalized = re.sub(r"\s*:\s*", ":", normalized)
+    normalized = re.sub(r"\s*;\s*", ";", normalized)
+    normalized = re.sub(r"\s*,\s*", ",", normalized)
+    normalized = re.sub(r"\s*\?\s*", "?", normalized)
+    normalized = re.sub(r"\s*!\s*", "!", normalized)
+    normalized = re.sub(r"\s*-\s*", "-", normalized)
+    normalized = re.sub(r"\.{3,}", "...", normalized)
+    return compact_text(normalized)
+
+
+def build_article_id(
+    *,
+    paper_id: str,
+    page: int,
+    title_normalized: str,
+    block_kind: str,
+    block_index: int,
+) -> str:
+    seed = "|".join(
+        [
+            str(paper_id or ""),
+            str(page or 0),
+            str(block_kind or ""),
+            str(block_index or 0),
+            title_normalized,
+        ]
+    )
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:12]
+    return f"{paper_id}:p{page}:{block_kind}:{block_index}:{digest}"
+
+
+def build_article_lookup_keys(article_id: str, paper_id: str, page: int, title_normalized: str, block_kind: str, block_index: int) -> list[str]:
+    keys = [
+        article_id,
+        f"paper_id:{paper_id}",
+        f"page:{page}",
+    ]
+    if title_normalized:
+        keys.append(f"title:{title_normalized}")
+    keys.append(f"block:{block_kind}:{block_index}")
+    return keys
+
+
+def merge_article_lookup_keys(
+    existing_keys: object,
+    article_id: str,
+    paper_id: str,
+    page: int,
+    title_normalized: str,
+    block_kind: str,
+    block_index: int,
+) -> list[str]:
+    merged: list[str] = []
+    if isinstance(existing_keys, list):
+        merged.extend(str(item) for item in existing_keys if str(item).strip())
+    for key in build_article_lookup_keys(article_id, paper_id, page, title_normalized, block_kind, block_index):
+        if key not in merged:
+            merged.append(key)
+    return merged
+
+
+def compute_article_priority_score(article: dict[str, object]) -> float:
+    explicit_priority = article.get("priority_score")
+    if explicit_priority is not None:
+        try:
+            return round(float(explicit_priority), 3)
+        except (TypeError, ValueError):
+            pass
+    score = 0.0
+    page = int(article.get("page", 0) or 0)
+    title = str(article.get("title_guess") or article.get("title") or "").strip()
+    body_text = str(article.get("body_text", "")).strip()
+    byline = str(article.get("byline", "")).strip()
+    block_kind = str(article.get("block_kind", "")).strip()
+    importance_hints = [str(item) for item in article.get("importance_hints", []) if str(item).strip()]
+    topic_tags = [str(item) for item in article.get("topic_tags", []) if str(item).strip()]
+
+    if title:
+        score += 2.0
+    if body_text:
+        score += min(len(body_text), 1200) / 600.0
+    if byline:
+        score += 0.6
+    for hint in importance_hints:
+        if hint == "headline":
+            score += 2.5
+        elif hint.startswith("topic:"):
+            score += 1.0
+        elif hint.startswith("section:"):
+            score += 0.75
+        elif hint == "front_pages":
+            score += 1.0
+        elif hint == "long_body":
+            score += 0.5
+    if topic_tags:
+        score += min(1.5, 0.35 * len(topic_tags))
+    if page > 0:
+        score += max(0.0, 10.0 - min(page, 10)) * 0.15
+    if block_kind == "article_block":
+        score += 1.2
+    elif block_kind == "page_fallback":
+        score -= 0.3
+    elif block_kind == "service_block":
+        score -= 3.0
+    if any(marker in body_text for marker in ("订阅", "客户服务", "服务指南", "nytimes.com", "音频", "视频", "互动报道")):
+        score -= 2.0
+    noisy_title_markers = (
+        "NEW YORK TIMES",
+        "路透社",
+        "美联社",
+        "图片来源",
+        "内容速递",
+        "读者专栏",
+        "迷你纵横字谜",
+        ".com",
+        ".org",
+        "___",
+    )
+    if any(marker in title for marker in noisy_title_markers):
+        score -= 4.0
+    if re.search(r"\b[A-Z]\d+\b", title):
+        score -= 2.5
+    if len(re.findall(r"\d+", title)) >= 3:
+        score -= 3.0
+    if not byline and not topic_tags:
+        score -= 1.0
+    return round(score, 3)
+
+
+def enrich_article_record(article: dict[str, object]) -> dict[str, object]:
+    enriched = dict(article)
+    paper_id = str(enriched.get("paper_id", "") or "")
+    page = int(enriched.get("page", 0) or 0)
+    block_kind = str(enriched.get("block_kind", "") or "page_fallback")
+    block_index = int(enriched.get("block_index", 0) or 0)
+    title_guess = str(enriched.get("title_guess") or enriched.get("title") or "").strip()
+    title = normalize_article_title(str(enriched.get("title") or title_guess))
+    title_normalized = normalize_article_title(str(enriched.get("title_normalized") or title))
+    article_id = str(enriched.get("article_id") or "").strip()
+    if not article_id:
+        article_id = build_article_id(
+            paper_id=paper_id,
+            page=page,
+            title_normalized=title_normalized,
+            block_kind=block_kind,
+            block_index=block_index,
+        )
+    lookup_keys = enriched.get("lookup_keys")
+    lookup_keys = merge_article_lookup_keys(
+        lookup_keys,
+        article_id,
+        paper_id,
+        page,
+        title_normalized,
+        block_kind,
+        block_index,
+    )
+
+    enriched["page"] = page
+    enriched["title"] = title
+    enriched["title_guess"] = title_guess or title
+    enriched["title_normalized"] = title_normalized
+    enriched["block_kind"] = block_kind
+    enriched["block_index"] = block_index
+    enriched["article_id"] = article_id
+    enriched["lookup_keys"] = [str(item) for item in lookup_keys if str(item).strip()]
+    explicit_priority = enriched.get("priority_score")
+    if explicit_priority is None:
+        explicit_priority = enriched.get("summary_score")
+    if explicit_priority is None:
+        priority_score = compute_article_priority_score(enriched)
+    else:
+        priority_score = round(float(explicit_priority), 3)
+    enriched["priority_score"] = priority_score
+    return enriched
 
 
 TRANSLATED_FURNITURE_SUBSTRINGS = (
@@ -1094,8 +1302,10 @@ def build_article_candidate(
 
     title_guess = title_override or article_title_guess(lines)
     byline = byline_override or extract_byline(cleaned_text)
+    title = normalize_article_title(title_guess)
+    page = int(page_record.get("page", 0) or 0)
     body_lines = list(lines)
-    if title_guess and body_lines and body_lines[0] == title_guess:
+    if title and body_lines and normalize_article_title(body_lines[0]) == title:
         body_lines = body_lines[1:]
     if byline and body_lines and body_lines[0] == byline:
         body_lines = body_lines[1:]
@@ -1111,17 +1321,20 @@ def build_article_candidate(
         importance_hints.append(f"section:{section}")
     if len(body_text or cleaned_text) >= 500:
         importance_hints.append("long_body")
-    if int(page_record.get("page", 0) or 0) <= 3:
+    if page <= 3:
         importance_hints.append("front_pages")
     for topic in topic_tags:
         importance_hints.append(f"topic:{topic}")
 
-    return {
+    return enrich_article_record(
+        {
         "source_name": page_record.get("source_name", ""),
         "paper_id": page_record.get("paper_id", ""),
         "url": page_record.get("url", ""),
-        "page": int(page_record.get("page", 0) or 0),
+        "page": page,
+        "title": title,
         "title_guess": title_guess,
+        "title_normalized": title,
         "byline": byline,
         "body_text": body_text or cleaned_text,
         "section_guess": section,
@@ -1132,7 +1345,8 @@ def build_article_candidate(
         "source_page_rank": source_page_rank,
         "text_path": page_record.get("text_path"),
         "ocr_path": page_record.get("ocr_path"),
-    }
+        }
+    )
 
 
 def article_title_guess(lines: list[str]) -> str:
@@ -1267,82 +1481,25 @@ def build_article_candidates(
         )
         if candidate is not None:
             candidates.append(candidate)
-    candidates.sort(key=lambda item: (int(item["page"]), int(item.get("block_index", 0) or 0)))
+    candidates = [enrich_article_record(candidate) for candidate in candidates]
+    candidates.sort(key=lambda item: (-float(item.get("priority_score", 0.0) or 0.0), int(item["page"]), int(item.get("block_index", 0) or 0)))
     return candidates
 
 
 def write_articles_json(path: Path, run_date: str, articles: list[dict[str, object]]) -> None:
     payload = {
         "run_date": run_date,
-        "articles": articles,
+        "articles": [enrich_article_record(article) for article in articles],
     }
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
 def score_summary_candidate(article: dict[str, object]) -> float:
-    score = 0.0
-    page = int(article.get("page", 0) or 0)
-    title = str(article.get("title_guess", "")).strip()
-    body_text = str(article.get("body_text", "")).strip()
-    byline = str(article.get("byline", "")).strip()
-    block_kind = str(article.get("block_kind", "")).strip()
-    importance_hints = [str(item) for item in article.get("importance_hints", []) if str(item).strip()]
-    topic_tags = [str(item) for item in article.get("topic_tags", []) if str(item).strip()]
-
-    if title:
-        score += 2.0
-    if body_text:
-        score += min(len(body_text), 1200) / 600.0
-    if byline:
-        score += 0.6
-    for hint in importance_hints:
-        if hint == "headline":
-            score += 2.5
-        elif hint.startswith("topic:"):
-            score += 1.0
-        elif hint.startswith("section:"):
-            score += 0.75
-        elif hint == "front_pages":
-            score += 1.0
-        elif hint == "long_body":
-            score += 0.5
-    if topic_tags:
-        score += min(1.5, 0.35 * len(topic_tags))
-    if page > 0:
-        score += max(0.0, 10.0 - min(page, 10)) * 0.15
-    if block_kind == "article_block":
-        score += 1.2
-    elif block_kind == "page_fallback":
-        score -= 0.3
-    elif block_kind == "service_block":
-        score -= 3.0
-    if any(marker in body_text for marker in ("订阅", "客户服务", "服务指南", "nytimes.com", "音频", "视频", "互动报道")):
-        score -= 2.0
-    noisy_title_markers = (
-        "NEW YORK TIMES",
-        "路透社",
-        "美联社",
-        "图片来源",
-        "内容速递",
-        "读者专栏",
-        "迷你纵横字谜",
-        ".com",
-        ".org",
-        "___",
-    )
-    if any(marker in title for marker in noisy_title_markers):
-        score -= 4.0
-    if re.search(r"\b[A-Z]\d+\b", title):
-        score -= 2.5
-    if len(re.findall(r"\d+", title)) >= 3:
-        score -= 3.0
-    if not byline and not topic_tags:
-        score -= 1.0
-    return round(score, 3)
+    return compute_article_priority_score(article)
 
 
 def summarize_article_candidate(article: dict[str, object]) -> dict[str, object]:
-    summary_article = dict(article)
+    summary_article = enrich_article_record(article)
     body_text = str(article.get("body_text", "")).strip()
     excerpt = str(article.get("summary_text", "")).strip()
     if not excerpt and body_text:
@@ -1352,7 +1509,7 @@ def summarize_article_candidate(article: dict[str, object]) -> dict[str, object]
         else:
             excerpt = compact_text(body_text)[:220]
     summary_article["summary_text"] = excerpt
-    summary_article["summary_score"] = score_summary_candidate(article)
+    summary_article["summary_score"] = float(summary_article.get("priority_score", 0.0) or 0.0)
     return summary_article
 
 
@@ -1416,14 +1573,18 @@ def build_daily_brief_payload(run_date: date, summary_papers: list[dict[str, obj
     for paper in summary_papers:
         brief_articles: list[dict[str, object]] = []
         for article in paper.get("selected_articles", []):
+            enriched = enrich_article_record(article)
             brief_articles.append(
                 {
-                    "page": int(article.get("page", 0) or 0),
-                    "title": str(article.get("title_guess") or article.get("title") or "").strip(),
-                    "summary_text": str(article.get("summary_text") or article.get("body_text") or "").strip(),
-                    "topic_tags": [str(tag) for tag in article.get("topic_tags", []) if str(tag).strip()],
-                    "text_path": article.get("text_path"),
-                    "url": article.get("url") or paper.get("url"),
+                    "article_id": enriched.get("article_id"),
+                    "page": int(enriched.get("page", 0) or 0),
+                    "title": str(enriched.get("title") or enriched.get("title_guess") or "").strip(),
+                    "byline": str(enriched.get("byline") or "").strip(),
+                    "priority_score": float(enriched.get("priority_score", 0.0) or 0.0),
+                    "summary_text": str(enriched.get("summary_text") or enriched.get("body_text") or "").strip(),
+                    "topic_tags": [str(tag) for tag in enriched.get("topic_tags", []) if str(tag).strip()],
+                    "text_path": enriched.get("text_path"),
+                    "url": enriched.get("url") or paper.get("url"),
                 }
             )
         brief_papers.append(

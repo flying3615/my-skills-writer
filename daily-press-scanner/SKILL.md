@@ -104,7 +104,7 @@ out/
 - `results.json`
   - 主运行产物，包含 papers、page_index、errors、article candidates、summary contract
 - `articles.json`
-  - 给后续 AI 或自动化消费的 article candidates 扁平列表
+  - 给后续 AI 或自动化消费的完整文章库，是按需展开正文的主数据源
 - `summary.json`
   - 每份报纸的重点条目摘要 contract
 - `summary.md`
@@ -131,15 +131,21 @@ out/
 
 先从每页中文文本生成 `article_candidates`，每条至少包含：
 
+- `article_id`
 - `source_name`
 - `paper_id`
 - `url`
 - `page`
+- `title`
 - `title_guess`
+- `title_normalized`
+- `byline`
 - `body_text`
 - `section_guess`
 - `topic_tags`
 - `importance_hints`
+- `priority_score`
+- `lookup_keys`
 - `text_path`
 
 当前实现不是跨页文章重建，但也不再是“整页一条”的粗粒度模式：
@@ -149,7 +155,7 @@ out/
 - 第 `11-30` 页仍保留页级 fallback
 - 如果前页分块失败，会自动退回页级 candidate
 
-### 3. Stable Summary Contract
+### 3. Browse First, Expand Later
 
 脚本当前不会调用远程 AI API。
 
@@ -157,8 +163,14 @@ out/
 
 - `summary.json`
 - `summary.md`
+- `daily_brief.json`
 
-这样后续 Codex 自动化可以直接消费 summary contract，或者以后替换成真正的 AI 选择逻辑，而不需要改输出格式。
+推荐的使用方式是：
+
+1. 先让 AI 读 `daily_brief.json`，返回重点文章摘要列表
+2. 用户点名某篇文章后，再让 AI 用 `article_id` 或 `page + title` 去 `articles.json` 回取完整正文
+
+这样后续 Codex 自动化或安装这个 skill 的 AI，不需要重新下载 PDF，也不需要自己做文章匹配。
 
 ## 何时使用
 
@@ -244,9 +256,15 @@ out/
 
 当前会额外带一些结构字段，便于本地排序：
 
+- `article_id`
+- `title`
+- `title_normalized`
+- `byline`
 - `block_index`
 - `block_kind`
 - `source_page_rank`
+- `priority_score`
+- `lookup_keys`
 
 ### `summary.json`
 
@@ -285,18 +303,23 @@ out/
 
 每篇文章最少包含：
 
+- `article_id`
 - `page`
 - `title`
+- `byline`
+- `priority_score`
 - `summary_text`
 - `topic_tags`
 - `text_path`
 
 ## 消费原则
 
-- 对 translated PDF，优先看 `articles.json` 和 `summary.json`
+- 对 translated PDF，优先看 `daily_brief.json` 和 `articles.json`
 - 不要优先回退到 OCR 文本
 - 如果 `text_layer_status` 是 `available`，优先使用 `text_path`
-- 如果要接真正的 AI，总结层应该读 `article_candidates` 或 `summary.json`，而不是重新下载和重新抽取 PDF
+- 如果要接真正的 AI：
+  - 第一步读 `daily_brief.json` 做摘要浏览
+  - 第二步按 `article_id` 或 `page + title` 去 `articles.json` 拿完整 `body_text`
 
 ## 错误处理
 

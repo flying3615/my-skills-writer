@@ -581,6 +581,13 @@ class ArticleCandidateTests(unittest.TestCase):
     def setUp(self):
         self.scan = load_scan_module()
 
+    def test_normalize_article_title_canonicalizes_width_and_punctuation_variants(self):
+        title = "来自地球的“红色警报”：我们将走向何方？ ＡＩ—教育…"
+
+        normalized = self.scan.normalize_article_title(title)
+
+        self.assertEqual(normalized, '来自地球的"红色警报":我们将走向何方?AI-教育...')
+
     def test_strip_article_page_furniture_removes_masthead_and_weather_lines(self):
         raw_text = "\n".join(
             [
@@ -639,6 +646,146 @@ class ArticleCandidateTests(unittest.TestCase):
         self.assertNotIn("战争冲击波引发滞胀阴影", candidates[0]["body_text"])
         self.assertIn("headline", candidates[0]["importance_hints"])
         self.assertIn("war", candidates[0]["topic_tags"])
+
+    def test_build_article_candidates_assigns_stable_article_identity_fields(self):
+        with TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "out"
+            text_dir = out_dir / "text" / "nyt-2026-03-26"
+            text_dir.mkdir(parents=True, exist_ok=True)
+            text_path = text_dir / "page-001.txt"
+            text_path.write_text(
+                "\n".join(
+                    [
+                        "《纽约时报》",
+                        "战争冲击波引发滞胀阴影",
+                        "作者：TONY ROMM",
+                        "华盛顿 —— 随着与伊朗的开战导致全球石油和天然气价格飙升，特朗普总统对这种负面影响不屑一顾。",
+                        "经济学家表示，美国普通家庭和企业若要看到持续攀升的能源成本出现实质性回落，可能仍需数周甚至数月之久。",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            page_index = [
+                {
+                    "source_name": "纽约时报",
+                    "paper_id": "nyt-2026-03-26",
+                    "url": "https://example.com/nyt.pdf",
+                    "page": 1,
+                    "text_path": str(text_path.relative_to(out_dir)),
+                }
+            ]
+
+            candidates = self.scan.build_article_candidates(page_index, out_dir, self.scan.normalize_topic_terms(""))
+
+        self.assertEqual(len(candidates), 1)
+        candidate = candidates[0]
+        self.assertIn("article_id", candidate)
+        self.assertIn("title", candidate)
+        self.assertIn("title_normalized", candidate)
+        self.assertIn("lookup_keys", candidate)
+        self.assertEqual(candidate["title"], candidate["title_guess"])
+        self.assertEqual(candidate["title_normalized"], "战争冲击波引发滞胀阴影")
+        self.assertIn(candidate["article_id"], candidate["lookup_keys"])
+        self.assertIn("page:1", candidate["lookup_keys"])
+        self.assertIn("title:战争冲击波引发滞胀阴影", candidate["lookup_keys"])
+
+    def test_build_article_candidates_generates_stable_article_id_for_same_input(self):
+        with TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "out"
+            text_dir = out_dir / "text" / "nyt-2026-03-26"
+            text_dir.mkdir(parents=True, exist_ok=True)
+            text_path = text_dir / "page-001.txt"
+            text_path.write_text(
+                "\n".join(
+                    [
+                        "《纽约时报》",
+                        "战争冲击波引发滞胀阴影",
+                        "作者：TONY ROMM",
+                        "华盛顿 —— 随着与伊朗的开战导致全球石油和天然气价格飙升，特朗普总统对这种负面影响不屑一顾。",
+                        "经济学家表示，美国普通家庭和企业若要看到持续攀升的能源成本出现实质性回落，可能仍需数周甚至数月之久。",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            page_index = [
+                {
+                    "source_name": "纽约时报",
+                    "paper_id": "nyt-2026-03-26",
+                    "url": "https://example.com/nyt.pdf",
+                    "page": 1,
+                    "text_path": str(text_path.relative_to(out_dir)),
+                }
+            ]
+
+            first = self.scan.build_article_candidates(page_index, out_dir, self.scan.normalize_topic_terms(""))
+            second = self.scan.build_article_candidates(page_index, out_dir, self.scan.normalize_topic_terms(""))
+
+        self.assertEqual(first[0]["article_id"], second[0]["article_id"])
+
+    def test_build_article_candidates_normalize_title_variants_to_same_article_id(self):
+        with TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "out"
+            text_dir = out_dir / "text" / "nyt-2026-03-26"
+            text_dir.mkdir(parents=True, exist_ok=True)
+
+            first_path = text_dir / "page-001.txt"
+            first_path.write_text(
+                "\n".join(
+                    [
+                        "《纽约时报》",
+                        "来自地球的“红色警报”：我们将走向何方？",
+                        "作者：Reporter",
+                        "正文内容足够长，用来生成稳定文章标识和正文抽取结果。",
+                        "第二段正文继续补足长度，避免被过滤掉。",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            second_path = text_dir / "page-002.txt"
+            second_path.write_text(
+                "\n".join(
+                    [
+                        "《纽约时报》",
+                        '来自地球的"红色警报":我们将走向何方?',
+                        "作者：Reporter",
+                        "正文内容足够长，用来生成稳定文章标识和正文抽取结果。",
+                        "第二段正文继续补足长度，避免被过滤掉。",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            first_candidates = self.scan.build_article_candidates(
+                [
+                    {
+                        "source_name": "纽约时报",
+                        "paper_id": "nyt-2026-03-26",
+                        "url": "https://example.com/nyt.pdf",
+                        "page": 1,
+                        "text_path": str(first_path.relative_to(out_dir)),
+                    }
+                ],
+                out_dir,
+                self.scan.normalize_topic_terms(""),
+            )
+            second_candidates = self.scan.build_article_candidates(
+                [
+                    {
+                        "source_name": "纽约时报",
+                        "paper_id": "nyt-2026-03-26",
+                        "url": "https://example.com/nyt.pdf",
+                        "page": 1,
+                        "text_path": str(second_path.relative_to(out_dir)),
+                    }
+                ],
+                out_dir,
+                self.scan.normalize_topic_terms(""),
+            )
+
+        self.assertEqual(first_candidates[0]["title_normalized"], second_candidates[0]["title_normalized"])
+        self.assertEqual(first_candidates[0]["article_id"], second_candidates[0]["article_id"])
 
     def test_build_article_candidates_skips_pages_without_text_path(self):
         with TemporaryDirectory() as tmpdir:
@@ -734,6 +881,10 @@ class ArticleCandidateTests(unittest.TestCase):
             payload = json.loads(articles_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["articles"][0]["page"], 1)
             self.assertEqual(payload["articles"][0]["title_guess"], "战争冲击波引发滞胀阴影")
+            self.assertIn("article_id", payload["articles"][0])
+            self.assertIn("title_normalized", payload["articles"][0])
+            self.assertIn("lookup_keys", payload["articles"][0])
+            self.assertIn("priority_score", payload["articles"][0])
             self.assertTrue((out_dir / "summary.json").exists())
             self.assertTrue((out_dir / "summary.md").exists())
 
@@ -970,13 +1121,19 @@ class SummaryContractTests(unittest.TestCase):
                     "source_name": "纽约时报",
                     "paper_id": "nyt-2026-03-26",
                     "url": "https://example.com/paper.pdf",
+                    "article_id": "nyt-2026-03-26:p1:page_fallback:0:test",
                     "page": 1,
+                    "title": "战争冲击波引发滞胀阴影",
                     "title_guess": "战争冲击波引发滞胀阴影",
+                    "title_normalized": "战争冲击波引发滞胀阴影",
+                    "byline": "作者：TONY ROMM",
                     "body_text": "正文",
                     "summary_text": "摘要内容",
+                    "priority_score": 9.75,
                     "section_guess": "",
                     "topic_tags": ["war"],
                     "importance_hints": ["headline"],
+                    "lookup_keys": ["nyt-2026-03-26:p1:page_fallback:0:test", "page:1", "title:战争冲击波引发滞胀阴影"],
                     "text_path": "text/nyt-2026-03-26/page-001.txt",
                 }
             ]
@@ -998,9 +1155,68 @@ class SummaryContractTests(unittest.TestCase):
             self.assertEqual(brief_payload["papers"][0]["source_name"], "纽约时报")
             self.assertEqual(brief_payload["papers"][0]["selected_count"], 1)
             self.assertEqual(len(brief_payload["papers"][0]["articles"]), 1)
+            self.assertEqual(brief_payload["papers"][0]["articles"][0]["article_id"], "nyt-2026-03-26:p1:page_fallback:0:test")
+            self.assertEqual(brief_payload["papers"][0]["articles"][0]["byline"], "作者：TONY ROMM")
+            self.assertEqual(brief_payload["papers"][0]["articles"][0]["priority_score"], 9.75)
             self.assertEqual(brief_payload["papers"][0]["articles"][0]["title"], "战争冲击波引发滞胀阴影")
             self.assertEqual(brief_payload["papers"][0]["articles"][0]["summary_text"], "摘要内容")
             self.assertEqual(brief_payload["papers"][0]["articles"][0]["text_path"], "text/nyt-2026-03-26/page-001.txt")
+
+    def test_select_summary_articles_respects_explicit_priority_score(self):
+        articles = [
+            {
+                "source_name": "纽约时报",
+                "paper_id": "nyt-2026-03-26",
+                "url": "https://example.com/paper.pdf",
+                "page": 1,
+                "title_guess": "看似重要但不该优先",
+                "body_text": " ".join(["普通正文"] * 120),
+                "section_guess": "",
+                "topic_tags": [],
+                "importance_hints": [],
+                "text_path": "text/nyt-2026-03-26/page-001.txt",
+                "priority_score": 1.0,
+            },
+            {
+                "source_name": "纽约时报",
+                "paper_id": "nyt-2026-03-26",
+                "url": "https://example.com/paper.pdf",
+                "page": 2,
+                "title_guess": "明确更重要的文章",
+                "body_text": "短正文",
+                "section_guess": "",
+                "topic_tags": [],
+                "importance_hints": [],
+                "text_path": "text/nyt-2026-03-26/page-002.txt",
+                "priority_score": 9.5,
+            },
+        ]
+
+        selected = self.scan.select_summary_articles(articles, min_items=1, max_items=2)
+
+        self.assertEqual(selected[0]["page"], 2)
+        self.assertEqual(selected[0]["priority_score"], 9.5)
+
+    def test_enrich_article_record_fills_required_lookup_keys(self):
+        record = {
+            "source_name": "纽约时报",
+            "paper_id": "nyt-2026-03-26",
+            "page": 1,
+            "title_guess": "战争冲击波引发滞胀阴影",
+            "title": "战争冲击波引发滞胀阴影",
+            "block_kind": "page_fallback",
+            "block_index": 0,
+            "lookup_keys": ["custom:key"],
+        }
+
+        enriched = self.scan.enrich_article_record(record)
+
+        self.assertIn("article_id", enriched)
+        self.assertIn(enriched["article_id"], enriched["lookup_keys"])
+        self.assertIn("page:1", enriched["lookup_keys"])
+        self.assertIn("title:战争冲击波引发滞胀阴影", enriched["lookup_keys"])
+        self.assertIn("block:page_fallback:0", enriched["lookup_keys"])
+        self.assertIn("custom:key", enriched["lookup_keys"])
 
     def test_select_summary_articles_demotes_service_blocks_below_real_articles(self):
         articles = [
