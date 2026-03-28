@@ -2283,256 +2283,263 @@ def process_paper(
         }
 
     pdf_path = downloaded_path or pdf_path
-    page_count, page_count_source = get_page_count(pdf_path)
-    if page_count is None:
-        page_limit = max_pages if max_pages is not None else 200
-        paper_errors.append(
-            {
-                "source": source_url or source,
-                "paper": paper_slug,
-                "stage": "page_count",
-                "message": page_count_source or "unknown page count",
-            }
-        )
-    else:
-        page_limit = min(page_count, max_pages) if max_pages is not None else page_count
-
-    text_layer = extract_text_layer(pdf_path)
-    text_layer_status = str(text_layer.get("status", "unavailable"))
-    text_layer_reason = str(text_layer.get("reason", ""))
-    text_layer_score = float(text_layer.get("score", 0.0) or 0.0)
-    text_layer_char_count = int(text_layer.get("char_count", 0) or 0)
-    text_layer_line_count = int(text_layer.get("line_count", 0) or 0)
-    text_layer_dir = ensure_dir(out_dir / "text" / paper_slug)
-    text_layer_page_paths: dict[int, Path] = {}
-    text_layer_page_count = 0
-    bbox_page_blocks: dict[int, list[dict[str, object]]] = {}
-    raw_text = ""
-    use_text_layer_fast_path = False
-    if text_layer_status == "available":
-        raw_text = str(text_layer.get("raw_text") or text_layer.get("text") or "")
-        text_layer_page_paths = write_text_layer_artifacts(raw_text, text_layer_dir)
-        text_layer_page_count = len(text_layer_page_paths)
-        use_text_layer_fast_path = should_use_text_layer_fast_path(raw_text)
-        try:
-            bbox_page_blocks = extract_bbox_page_blocks(pdf_path)
-        except Exception as exc:
+    try:
+        page_count, page_count_source = get_page_count(pdf_path)
+        if page_count is None:
+            page_limit = max_pages if max_pages is not None else 200
             paper_errors.append(
                 {
                     "source": source_url or source,
                     "paper": paper_slug,
-                    "stage": "bbox",
-                    "message": str(exc),
+                    "stage": "page_count",
+                    "message": page_count_source or "unknown page count",
                 }
             )
-    if text_layer_status != "available":
-        paper_errors.append(
-            {
-                "source": source_url or source,
-                "paper": paper_slug,
-                "stage": "text_layer",
-                "message": text_layer_reason or "text layer unavailable",
-            }
-        )
+        else:
+            page_limit = min(page_count, max_pages) if max_pages is not None else page_count
 
-    page_index: list[dict[str, object]] = []
-    opinion_candidates: list[dict[str, object]] = []
-    topic_hits: list[dict[str, object]] = []
-    review_candidates: list[dict[str, object]] = []
-    scan_limit = page_limit if page_limit is not None else (max_pages or 200)
-    if use_text_layer_fast_path:
-        page_index = build_text_layer_page_records(
-            source_name=source_name,
-            paper_slug=paper_slug,
-            source_url=source_url or source,
-            out_dir=out_dir,
-            page_paths=text_layer_page_paths,
-            bbox_page_blocks=bbox_page_blocks,
-            scan_limit=scan_limit,
-            topic_map=topic_map,
-        )
-    else:
-        with tempfile.TemporaryDirectory(prefix=f"{paper_slug}-") as tmp_root:
-            tmp_dir = Path(tmp_root)
-            for page_number in range(1, scan_limit + 1):
-                preview_stem = preview_dir / f"page-{page_number:03d}"
-                ocr_path = ocr_dir / f"page-{page_number:03d}.txt"
-                page_record: dict[str, object] = {
-                    "source_name": source_name,
-                    "paper_id": paper_slug,
-                    "url": source_url or source,
-                    "page": page_number,
-                    "preview_path": str(preview_stem.with_suffix(".png").relative_to(out_dir)),
-                    "ocr_path": str(ocr_path.relative_to(out_dir)),
-                    "text_path": display_path(text_layer_page_paths[page_number], out_dir) if page_number in text_layer_page_paths else None,
-                    "bbox_blocks": bbox_page_blocks.get(page_number, []),
+        text_layer = extract_text_layer(pdf_path)
+        text_layer_status = str(text_layer.get("status", "unavailable"))
+        text_layer_reason = str(text_layer.get("reason", ""))
+        text_layer_score = float(text_layer.get("score", 0.0) or 0.0)
+        text_layer_char_count = int(text_layer.get("char_count", 0) or 0)
+        text_layer_line_count = int(text_layer.get("line_count", 0) or 0)
+        text_layer_dir = ensure_dir(out_dir / "text" / paper_slug)
+        text_layer_page_paths: dict[int, Path] = {}
+        text_layer_page_count = 0
+        bbox_page_blocks: dict[int, list[dict[str, object]]] = {}
+        raw_text = ""
+        use_text_layer_fast_path = False
+        if text_layer_status == "available":
+            raw_text = str(text_layer.get("raw_text") or text_layer.get("text") or "")
+            text_layer_page_paths = write_text_layer_artifacts(raw_text, text_layer_dir)
+            text_layer_page_count = len(text_layer_page_paths)
+            use_text_layer_fast_path = should_use_text_layer_fast_path(raw_text)
+            try:
+                bbox_page_blocks = extract_bbox_page_blocks(pdf_path)
+            except Exception as exc:
+                paper_errors.append(
+                    {
+                        "source": source_url or source,
+                        "paper": paper_slug,
+                        "stage": "bbox",
+                        "message": str(exc),
+                    }
+                )
+        if text_layer_status != "available":
+            paper_errors.append(
+                {
+                    "source": source_url or source,
+                    "paper": paper_slug,
+                    "stage": "text_layer",
+                    "message": text_layer_reason or "text layer unavailable",
                 }
-                try:
-                    image_path = render_page(pdf_path, page_number, preview_stem, dpi)
-                    variants = prepare_ocr_variants(image_path, tmp_dir / f"page-{page_number:03d}")
-                    variant_texts: list[str] = []
-                    ocr_variant_errors = 0
-                    for variant in variants:
-                        try:
-                            best = best_ocr_text_for_image_variant(variant, prefer_title=False)
-                            if best.get("text"):
-                                variant_texts.append(str(best["text"]))
-                        except Exception as exc:
-                            ocr_variant_errors += 1
-                            paper_errors.append(
-                                {
-                                    "source": source_url or source,
-                                    "paper": paper_slug,
-                                    "page": page_number,
-                                    "stage": "ocr",
-                                    "message": str(exc),
-                                }
-                            )
-                    merged_text = merge_ocr_texts(variant_texts)
-                    if not merged_text:
-                        if ocr_variant_errors == 0:
-                            paper_errors.append(
-                                {
-                                    "source": source_url or source,
-                                    "paper": paper_slug,
-                                    "page": page_number,
-                                    "stage": "ocr",
-                                    "message": "ocr produced no usable text",
-                                }
-                            )
-                        continue
+            )
 
-                    ocr_path.write_text(merged_text + "\n", encoding="utf-8")
-
-                    raw_lines = [line.strip() for line in merged_text.splitlines() if line.strip()]
-                    title = title_candidate(raw_lines)
-                    snippet = snippet_text(raw_lines)
-                    op_score, section, op_reasons = opinion_score(raw_lines, merged_text)
-                    matches = topic_matches(topic_map, merged_text, title, snippet)
-
-                    page_record.update(
-                        {
-                            "title": title,
-                            "snippet": snippet,
-                            "section_guess": section,
-                            "opinion_score": round(op_score, 3),
-                            "topic_matches": matches,
-                        }
-                    )
-                    page_index.append(page_record)
-
-                    if op_score >= 0.5:
-                        opinion_candidates.append(
-                            {
-                                "source_name": source_name,
-                                "url": source_url or source,
-                                "page": page_number,
-                                "title": title,
-                                "section_guess": section,
-                                "snippet": snippet,
-                                "confidence": round(op_score, 3),
-                                "topic_tags": [match["topic"] for match in matches[:3]],
-                                "reasons": op_reasons,
-                            }
-                        )
-
-                    for match in matches:
-                        topic_hits.append(
-                            {
-                                "source_name": source_name,
-                                "url": source_url or source,
-                                "page": page_number,
-                                "topic": match["topic"],
-                                "title": title,
-                                "snippet": snippet,
-                                "score": match["score"],
-                                "matched_terms": match["matched_terms"],
-                            }
-                        )
-                except subprocess.CalledProcessError as exc:
-                    paper_errors.append(
-                        {
-                            "source": source_url or source,
-                            "paper": paper_slug,
-                            "page": page_number,
-                            "stage": "render",
-                            "message": exc.stderr.strip() or exc.stdout.strip() or str(exc),
-                        }
-                    )
-                    if page_count is None:
-                        break
-                except Exception as exc:
-                    paper_errors.append(
-                        {
-                            "source": source_url or source,
-                            "paper": paper_slug,
-                            "page": page_number,
-                            "stage": "page",
-                            "message": str(exc),
-                        }
-                    )
-                    continue
-
-    page_records = {int(item["page"]): item for item in page_index}
-    if not use_text_layer_fast_path:
-        for target in select_review_targets(opinion_candidates, topic_hits):
-            page_record = page_records.get(int(target["page"]))
-            if page_record is None:
-                continue
-            reviewed = review_page_candidates(
+        page_index: list[dict[str, object]] = []
+        opinion_candidates: list[dict[str, object]] = []
+        topic_hits: list[dict[str, object]] = []
+        review_candidates: list[dict[str, object]] = []
+        scan_limit = page_limit if page_limit is not None else (max_pages or 200)
+        if use_text_layer_fast_path:
+            page_index = build_text_layer_page_records(
                 source_name=source_name,
                 paper_slug=paper_slug,
-                source=source_url or source,
-                page_record=page_record,
-                target=target,
+                source_url=source_url or source,
                 out_dir=out_dir,
+                page_paths=text_layer_page_paths,
+                bbox_page_blocks=bbox_page_blocks,
+                scan_limit=scan_limit,
                 topic_map=topic_map,
-                paper_errors=paper_errors,
             )
-            if reviewed:
-                review_candidates.extend(reviewed)
-            else:
-                review_candidates.append(
-                    build_review_fallback_candidate(
-                        source_name=source_name,
-                        paper_slug=paper_slug,
-                        source=source_url or source,
-                        page_record=page_record,
-                        target=target,
-                    )
-                )
+        else:
+            with tempfile.TemporaryDirectory(prefix=f"{paper_slug}-") as tmp_root:
+                tmp_dir = Path(tmp_root)
+                for page_number in range(1, scan_limit + 1):
+                    preview_stem = preview_dir / f"page-{page_number:03d}"
+                    ocr_path = ocr_dir / f"page-{page_number:03d}.txt"
+                    page_record: dict[str, object] = {
+                        "source_name": source_name,
+                        "paper_id": paper_slug,
+                        "url": source_url or source,
+                        "page": page_number,
+                        "preview_path": str(preview_stem.with_suffix(".png").relative_to(out_dir)),
+                        "ocr_path": str(ocr_path.relative_to(out_dir)),
+                        "text_path": display_path(text_layer_page_paths[page_number], out_dir) if page_number in text_layer_page_paths else None,
+                        "bbox_blocks": bbox_page_blocks.get(page_number, []),
+                    }
+                    try:
+                        image_path = render_page(pdf_path, page_number, preview_stem, dpi)
+                        variants = prepare_ocr_variants(image_path, tmp_dir / f"page-{page_number:03d}")
+                        variant_texts: list[str] = []
+                        ocr_variant_errors = 0
+                        for variant in variants:
+                            try:
+                                best = best_ocr_text_for_image_variant(variant, prefer_title=False)
+                                if best.get("text"):
+                                    variant_texts.append(str(best["text"]))
+                            except Exception as exc:
+                                ocr_variant_errors += 1
+                                paper_errors.append(
+                                    {
+                                        "source": source_url or source,
+                                        "paper": paper_slug,
+                                        "page": page_number,
+                                        "stage": "ocr",
+                                        "message": str(exc),
+                                    }
+                                )
+                        merged_text = merge_ocr_texts(variant_texts)
+                        if not merged_text:
+                            if ocr_variant_errors == 0:
+                                paper_errors.append(
+                                    {
+                                        "source": source_url or source,
+                                        "paper": paper_slug,
+                                        "page": page_number,
+                                        "stage": "ocr",
+                                        "message": "ocr produced no usable text",
+                                    }
+                                )
+                            continue
 
-    article_candidates = build_article_candidates(page_index, out_dir, topic_map)
-    paper_summary = {
-        "source_name": source_name,
-        "paper_id": paper_slug,
-        "url": source_url or source,
-        "source_record": source_record,
-        "local_pdf": display_path(pdf_path, out_dir),
-        "page_count": page_count,
-        "scanned_pages": len(page_index),
-        "status": "ok" if not paper_errors else "ok_with_errors",
-        "page_count_source": page_count_source,
-        "text_layer_status": text_layer_status,
-        "text_layer_reason": text_layer_reason,
-        "text_layer_score": text_layer_score,
-        "text_layer_char_count": text_layer_char_count,
-        "text_layer_line_count": text_layer_line_count,
-        "text_layer_dir": display_path(text_layer_dir, out_dir) if text_layer_status == "available" else None,
-        "text_layer_page_count": text_layer_page_count,
-        "article_count": len(article_candidates),
-        "scan_mode": "text_layer" if use_text_layer_fast_path else "ocr",
-    }
-    write_preview_summary(preview_dir / "summary.txt", paper_summary, page_index, opinion_candidates, topic_hits, review_candidates)
-    return {
-        "paper": paper_summary,
-        "page_index": page_index,
-        "opinion_candidates": opinion_candidates,
-        "topic_hits": topic_hits,
-        "review_candidates": review_candidates,
-        "article_candidates": article_candidates,
-        "errors": paper_errors,
-    }
+                        ocr_path.write_text(merged_text + "\n", encoding="utf-8")
+
+                        raw_lines = [line.strip() for line in merged_text.splitlines() if line.strip()]
+                        title = title_candidate(raw_lines)
+                        snippet = snippet_text(raw_lines)
+                        op_score, section, op_reasons = opinion_score(raw_lines, merged_text)
+                        matches = topic_matches(topic_map, merged_text, title, snippet)
+
+                        page_record.update(
+                            {
+                                "title": title,
+                                "snippet": snippet,
+                                "section_guess": section,
+                                "opinion_score": round(op_score, 3),
+                                "topic_matches": matches,
+                            }
+                        )
+                        page_index.append(page_record)
+
+                        if op_score >= 0.5:
+                            opinion_candidates.append(
+                                {
+                                    "source_name": source_name,
+                                    "url": source_url or source,
+                                    "page": page_number,
+                                    "title": title,
+                                    "section_guess": section,
+                                    "snippet": snippet,
+                                    "confidence": round(op_score, 3),
+                                    "topic_tags": [match["topic"] for match in matches[:3]],
+                                    "reasons": op_reasons,
+                                }
+                            )
+
+                        for match in matches:
+                            topic_hits.append(
+                                {
+                                    "source_name": source_name,
+                                    "url": source_url or source,
+                                    "page": page_number,
+                                    "topic": match["topic"],
+                                    "title": title,
+                                    "snippet": snippet,
+                                    "score": match["score"],
+                                    "matched_terms": match["matched_terms"],
+                                }
+                            )
+                    except subprocess.CalledProcessError as exc:
+                        paper_errors.append(
+                            {
+                                "source": source_url or source,
+                                "paper": paper_slug,
+                                "page": page_number,
+                                "stage": "render",
+                                "message": exc.stderr.strip() or exc.stdout.strip() or str(exc),
+                            }
+                        )
+                        if page_count is None:
+                            break
+                    except Exception as exc:
+                        paper_errors.append(
+                            {
+                                "source": source_url or source,
+                                "paper": paper_slug,
+                                "page": page_number,
+                                "stage": "page",
+                                "message": str(exc),
+                            }
+                        )
+                        continue
+
+        page_records = {int(item["page"]): item for item in page_index}
+        if not use_text_layer_fast_path:
+            for target in select_review_targets(opinion_candidates, topic_hits):
+                page_record = page_records.get(int(target["page"]))
+                if page_record is None:
+                    continue
+                reviewed = review_page_candidates(
+                    source_name=source_name,
+                    paper_slug=paper_slug,
+                    source=source_url or source,
+                    page_record=page_record,
+                    target=target,
+                    out_dir=out_dir,
+                    topic_map=topic_map,
+                    paper_errors=paper_errors,
+                )
+                if reviewed:
+                    review_candidates.extend(reviewed)
+                else:
+                    review_candidates.append(
+                        build_review_fallback_candidate(
+                            source_name=source_name,
+                            paper_slug=paper_slug,
+                            source=source_url or source,
+                            page_record=page_record,
+                            target=target,
+                        )
+                    )
+
+        article_candidates = build_article_candidates(page_index, out_dir, topic_map)
+        paper_summary = {
+            "source_name": source_name,
+            "paper_id": paper_slug,
+            "url": source_url or source,
+            "source_record": source_record,
+            "local_pdf": None,
+            "page_count": page_count,
+            "scanned_pages": len(page_index),
+            "status": "ok" if not paper_errors else "ok_with_errors",
+            "page_count_source": page_count_source,
+            "text_layer_status": text_layer_status,
+            "text_layer_reason": text_layer_reason,
+            "text_layer_score": text_layer_score,
+            "text_layer_char_count": text_layer_char_count,
+            "text_layer_line_count": text_layer_line_count,
+            "text_layer_dir": display_path(text_layer_dir, out_dir) if text_layer_status == "available" else None,
+            "text_layer_page_count": text_layer_page_count,
+            "article_count": len(article_candidates),
+            "scan_mode": "text_layer" if use_text_layer_fast_path else "ocr",
+        }
+        write_preview_summary(preview_dir / "summary.txt", paper_summary, page_index, opinion_candidates, topic_hits, review_candidates)
+        return {
+            "paper": paper_summary,
+            "page_index": page_index,
+            "opinion_candidates": opinion_candidates,
+            "topic_hits": topic_hits,
+            "review_candidates": review_candidates,
+            "article_candidates": article_candidates,
+            "errors": paper_errors,
+        }
+    finally:
+        try:
+            if pdf_path.exists():
+                pdf_path.unlink()
+        except Exception:
+            pass
 
 
 def write_preview_summary(

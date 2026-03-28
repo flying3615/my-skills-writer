@@ -463,6 +463,39 @@ class TextLayerExtractionTests(unittest.TestCase):
             self.assertTrue((text_dir / "page-002.txt").exists())
             self.assertEqual(result["page_index"][0]["text_path"], str((text_dir / "page-001.txt").relative_to(out_dir)))
 
+    def test_process_paper_deletes_downloaded_pdf_after_processing(self):
+        with TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "out"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            fake_pdf = Path(tmpdir) / "paper.pdf"
+            fake_pdf.write_text("pdf placeholder", encoding="utf-8")
+            strong_text = "第一页标题\n第一页正文\n"
+
+            with (
+                mock.patch.object(self.scan, "download_or_copy_source", return_value=(fake_pdf, None)),
+                mock.patch.object(self.scan, "get_page_count", return_value=(1, "pypdf")),
+                mock.patch.object(self.scan, "extract_text_layer", return_value={
+                    "status": "available",
+                    "reason": "",
+                    "score": 1.0,
+                    "char_count": 8,
+                    "line_count": 2,
+                    "text": strong_text,
+                    "raw_text": strong_text,
+                }),
+                mock.patch.object(self.scan, "extract_bbox_page_blocks", return_value={}),
+            ):
+                result = self.scan.process_paper(
+                    source="https://example.com/paper.pdf",
+                    out_dir=out_dir,
+                    dpi=300,
+                    max_pages=1,
+                    topic_map={},
+                )
+
+            self.assertFalse(fake_pdf.exists())
+            self.assertIsNone(result["paper"]["local_pdf"])
+
     def test_process_paper_skips_ocr_when_text_layer_is_available(self):
         with TemporaryDirectory() as tmpdir:
             out_dir = Path(tmpdir) / "out"
