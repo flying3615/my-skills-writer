@@ -36,6 +36,18 @@
    ```
 - **主题参数**: 不传 `--topics` 时使用默认主题集；传入后只扫描指定主题。
 
+### 6. [Macro Market Report](./macro-market-report/SKILL.md)
+跨资产宏观市场报表工具。
+- **功能**:
+  - **一键快报**: 生成覆盖商品、股指、波动率、美元、美债和加密资产的中文市场报表。
+  - **关键变化**: 输出最新价格与 `1日 / 5日 / 1个月` 涨跌幅。
+  - **可扩展监控**: 支持通过 `--extra` 追加额外 ticker。
+- **运行要求**: 需要 `python3` 和 `yfinance`。
+- **执行方式**:
+   ```bash
+   python3 macro-market-report/scripts/market_report.py
+   ```
+
 ## 目录结构
 
 ```text
@@ -55,10 +67,16 @@
 │       ├── scanner.py
 │       ├── stock_price.py
 │       └── market_movers.py
-└── daily-press-scanner/ # 报纸 OCR 快扫与评论/热点索引工具
+├── daily-press-scanner/ # 报纸 OCR 快扫与评论/热点索引工具
+│   ├── SKILL.md
+│   └── scripts/
+│       └── scan.py
+└── macro-market-report/ # 跨资产宏观市场报表工具
     ├── SKILL.md
-    └── scripts/
-        └── scan.py
+    ├── scripts/
+    │   └── market_report.py
+    └── tests/
+        └── test_market_report.py
 ```
 
 ## 如何贡献
