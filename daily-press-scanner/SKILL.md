@@ -1,147 +1,209 @@
 ---
 name: daily-press-scanner
-description: Use when processing translated Chinese newspaper PDF URLs into extracted text, article candidates, and summary artifacts for daily automation.
+description: Use when extracting text from translated Chinese newspaper PDFs, then browsing and expanding articles in chat.
 ---
 
 # Daily Press Scanner Skill
 
-处理**中文版机器翻译报纸 PDF**，提取文字层并生成结构化摘要。
+这个 skill 现在是轻量输入层，不再负责本地文章识别和本地摘要生成。
 
-## 工作流程（两步走）
+职责边界：
 
-### 第一步：脚本提取（本地）
+1. 本地脚本只负责下载 PDF、提取文字层、写页级文本和 `results.json`
+2. 后续 AI 负责识别重点文章、排序、摘要和单篇展开
 
-```bash
-python3 daily-press-scanner/scripts/scan.py \
-  --urls urls.txt \
-  --out-dir ./out \
-  --run-date 2026-03-28
-```
+适用对象是**中文版机器翻译报纸 PDF**。目标是给聊天里的 AI 一个干净、稳定、低依赖的输入，而不是在本地规则里重建整份报纸。
 
-或使用 source-config：
+## 主入口
+
+唯一维护的入口是：
 
 ```bash
-python3 daily-press-scanner/scripts/scan.py \
+python3 daily-press-scanner/scripts/extract.py \
   --source-config daily-press-scanner/configs/sources.example.json \
   --out-dir ./out \
-  --run-date 2026-03-28
+  --run-date 2026-03-29
 ```
 
-脚本负责：
-1. 下载 PDF（支持 URL 模板 + 日期展开）
-2. 提取文字层（pdftotext 优先，PyMuPDF 自动 fallback）
-3. 写出页级文本文件到 `text/<paper_slug>/page-001.txt` ...
-4. 写出 `results.json`（含 paper 元信息、页索引、错误记录）
+也支持单个 URL：
 
-### 第二步：AI 分析（必须）
-
-**脚本不负责文章识别和摘要——交给 AI。**
-
-脚本跑完后，AI agent 应该：
-
-1. 读取 `out/text/<paper_slug>/` 下所有 `page-*.txt` 文件
-2. 从全部页面中识别文章标题和页码
-3. 按重要性选出 **Top 10** 重点文章
-4. 对每篇重点文章写出 **3-5 句中文摘要**
-5. 列出其他值得关注的文章标题
-
-AI 分析结果写入 `out/summary.md`，格式：
-
-```markdown
-# 《报纸名》中文翻译版 每日摘要
-
-## 📰 报纸基本信息
-- 日期、总页数、版面分布
-
-## 🔥 Top 10 重点文章
-### 1. 文章标题
-**页码：** A1, A6
-摘要内容...
-
-## 📋 其他值得关注的文章
-| 标题 | 页码 |
+```bash
+python3 daily-press-scanner/scripts/extract.py \
+  --url "https://dl.dengtazk.xin/%E3%80%90%E8%AF%91%E3%80%91%E7%BA%BD%E7%BA%A6%E6%97%B6%E6%8A%A5-3-29.pdf" \
+  --out-dir ./out
 ```
 
-### 用户点阅某篇文章时
+也支持 URL 列表：
 
-AI 回到 `text/<paper_slug>/page-XXX.txt` 读取该页完整文本，提取并呈现全文。
+```bash
+python3 daily-press-scanner/scripts/extract.py \
+  --urls urls.txt \
+  --out-dir ./out
+```
 
-## 运行前提
+`scan.py` 只保留兼容 wrapper，不应再作为主入口使用。
 
-**必需：**
-- `python3`
-- `pymupdf`（`pip install pymupdf`）— 文字层提取的主力
+## 输入方式
 
-**可选（增强）：**
-- `pdftotext`（来自 `poppler`）— 如果可用，脚本会优先使用；不可用时自动 fallback 到 PyMuPDF
-- `pdftoppm` — OCR fallback，translated PDF 通常不需要
+推荐 `--source-config`，适合每日自动化。
 
-## 推荐输入方式
-
-推荐用 `--source-config`，适合每日自动化：
+示例：
 
 ```json
 {
   "sources": [
     {
-      "source_name": "Wall Street Journal",
-      "url_template": "https://dl.dengtazk.xin/%E3%80%90%E8%AF%91%E3%80%91%E5%8D%8E%E5%B0%94%E8%A1%97%E6%97%A5%E6%8A%A5-{month}-{day}.pdf",
+      "source_name": "New York Times",
+      "url_template": "https://dl.dengtazk.xin/%E3%80%90%E8%AF%91%E3%80%91%E7%BA%BD%E7%BA%A6%E6%97%B6%E6%8A%A5-{month}-{day}.pdf",
       "enabled": true
     }
   ]
 }
 ```
 
-占位符：`{year}` `{month}` `{day}` `{date}`
+支持占位符：
+
+- `{year}`
+- `{month}`
+- `{day}`
+- `{date}`
+
+如果不传 `--run-date`，默认使用当天日期。
+
+## 运行前提
+
+必需：
+
+- `python3`
+- `pdftotext`
+  通常来自 `poppler`，是首选文字层提取器。
+- `pymupdf`
+  当 `pdftotext` 不可用或失败时自动 fallback。
+
+## 脚本行为
+
+脚本只做这几件事：
+
+1. 解析 `--url` / `--urls` / `--source-config`
+2. 下载 PDF
+3. 优先用 `pdftotext` 提取文字层
+4. 失败时自动 fallback 到 `PyMuPDF`
+5. 写出页级文本到 `text/<paper_slug>/page-XXX.txt`
+6. 写出 `results.json`
+7. 每份报纸处理结束后删除本地工作 PDF
+
+脚本不做：
+
+- 本地文章切分
+- 本地重点排序
+- 本地摘要生成
+- 默认 OCR 主流程
 
 ## 输出目录
 
 ```text
 out/
-  results.json      # 脚本主产物：paper 元信息、页索引、错误
-  summary.md        # AI 生成的重点文章摘要（人类阅读）
-  pdfs/             # 下载的原始 PDF
-  text/             # 页级文字层文本
+  results.json
+  text/
     <paper_slug>/
       page-001.txt
       page-002.txt
       ...
 ```
 
-## 核心策略
+`results.json` 是主 contract，至少包含：
 
-### Text Layer First
+- `run_date`
+- `inputs`
+- `papers`
 
-- 优先 `pdftotext`（如果系统已安装）
-- 自动 fallback 到 PyMuPDF（`pymupdf` Python 包）
-- OCR 仅在文字层完全不可用时作为最后手段
-- 对 translated PDF，文字层几乎总是可用的
+每份 `paper` 至少包含：
 
-### 脚本只做提取，AI 做分析
+- `source_name`
+- `paper_id`
+- `url`
+- `source_record`
+- `status`
+- `method`
+- `pages`
+- `page_list`
+- `text_dir`
+- `error`
 
-脚本不再尝试用本地规则做文章分块/打分/摘要（效果差，版头被误识别为文章）。
+## 聊天使用方式
 
-**职责划分：**
-- **脚本**：下载 → 提取文字层 → 写页级文本 → 输出元数据
-- **AI**：读页级文本 → 识别文章 → 打分排序 → 写摘要
+### Browse Mode
 
-### Browse First, Expand Later
+第一次回答优先返回“重点文章列表”，不要先铺开整篇长文。
 
-1. AI 读完所有页面后生成 Top 10 摘要
-2. 用户点名某篇 → AI 回到对应页面提取全文
-3. 不需要重新下载 PDF 或重新处理
+每篇至少带：
 
-## 何时使用
+- 编号
+- 标题
+- 页码
+- 1-2 句简介
 
-- 用户给了一组中文版报纸 PDF 链接
-- 用户想做每日自动化简报
-- 用户希望快速了解报纸重点内容
+如果文章标题不完全清晰，可以用“主题 + 页码”的方式描述，但仍然要保持可选列表结构。
+
+### Read Mode
+
+当用户点名某篇文章后：
+
+1. 返回该文的整理版正文、长摘要或结构化要点
+2. 在回答尾部再次附上“简版文章列表”
+
+这个尾部列表至少保留：
+
+- 编号
+- 标题
+- 页码
+- 极短简介
+
+目的很简单：用户看完一篇后，不需要上翻很久就能继续选下一篇。
+
+### Article Retrieval
+
+AI 在浏览模式里先用 `text/<paper_slug>/page-*.txt` 自己识别和排序重点文章。
+
+用户要求展开某篇时：
+
+1. 根据编号找到对应标题和页码
+2. 回到相关页文本
+3. 提取并整理该篇正文
+4. 返回正文整理结果
+5. 尾部再附上简版文章列表
+
+如果一页里有多篇内容，优先根据标题和上下文做页内定位，而不是把整页全文原样倾倒给用户。
+
+## 上下文压缩策略
+
+当聊天上下文接近上限时，必须按这个优先级压缩：
+
+1. 优先保留重点文章列表
+2. 优先保留每篇文章的短简介
+3. 优先保留编号、页码、标题映射
+4. 优先压缩已经展示过的单篇长文细节
+
+换句话说，宁可把已展开文章压成 `5-8` 条要点，也不要丢掉文章列表。
+
+## 推荐回答节奏
+
+1. 先给本期报纸的重点文章列表
+2. 用户点一篇，就展开那一篇
+3. 展开后在末尾重贴简版列表
+4. 用户继续点下一篇
+
+这个 skill 适合“先浏览，再深挖”的阅读流，不适合一次性输出整份报纸全文。
 
 ## 错误处理
 
-失败写进 `results.json` 的 `errors` 数组：
-- 下载失败（SSL 问题等，脚本已内置 SSL fallback）
-- 文字层不可用
-- 页级处理失败
+- 单份报纸失败不影响整批
+- 下载失败或提取失败会写进 `results.json`
+- 不管成功失败，工作 PDF 都应在处理结束后删除
 
-单份报纸失败不影响整批。
+## 非目标
+
+- 英文原文对齐
+- 跨页精确拼接
+- 默认 OCR 主流程
+- 在本地脚本里直接产出最终日报摘要

@@ -1,0 +1,14 @@
+{
+  "sources": [
+    {
+      "source_name": "New York Times",
+      "url_template": "https://dl.dengtazk.xin/%E3%80%90%E8%AF%91%E3%80%91%E7%BA%BD%E7%BA%A6%E6%97%B6%E6%8A%A5-{month}-{day}.pdf",
+      "enabled": true
+    },
+    {
+      "source_name": "Financial Times",
+      "url_template": "https://dl.dengtazk.xin/%E3%80%90%E8%AF%91%E3%80%91%E9%87%91%E8%9E%8D%E6%97%B6%E6%8A%A5-{month}-{day}.pdf",
+      "enabled": true
+    }
+  ]
+}
