@@ -1,84 +1,88 @@
 # My Skills Writer
 
-这是一个用于存放和管理自定义 AI Skill 的项目。通过这些 Skill，可以增强 AI 助手的自动化能力，例如规范化 Skill 编写流程或自动化下载任务。
+这个仓库用于集中维护一组可复用的自定义 AI Skills。每个 skill 都围绕一个明确任务，通常附带 `SKILL.md` 指令文件，以及必要时的本地脚本，方便在聊天会话或自动化任务里直接调用。
 
-## 已包含的 Skill
+## 当前包含的 Skills
 
-### 1. [Skill Writer](./skill-writer/SKILL.md)
-专门用于辅助创建、更新和优化 AI Skill 的工具。它定义了本项目中 Skill 的标准目录结构和编写规范。
+### 1. [Daily Press Scanner](./daily-press-scanner/SKILL.md)
+处理中文版机器翻译报纸 PDF 的轻量提取工具。
+- 目标：把 PDF 转成适合后续 AI 阅读的页级文本输入。
+- 主流程：优先 `pdftotext` 提取文字层，失败时回退到 `PyMuPDF`。
+- 输出：`results.json` 和 `text/<paper_slug>/page-XXX.txt`。
+- 入口脚本：`python3 daily-press-scanner/scripts/extract.py`
+- 适合场景：先让 AI 生成重点文章列表，再按需展开单篇正文。
 
-### 2. [Video Downloader](./video-downloader/SKILL.md)
-自动化视频下载工具，基于 `nre` (N_m3u8DL-RE) 命令。
-- **功能**: 自动从用户提供的链接中提取视频并以指定名称保存。
-- **依赖**: 需要安装 [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE)。
+### 2. [News Summarizer](./news-summarizer/SKILL.md)
+面向日常新闻浏览的聚合与摘要 skill。
+- 目标：汇总新西兰、本地、国际和市场新闻，或按指定主题定向搜索。
+- 输出：中文摘要 + 原文链接。
+- 适合场景：每日新闻速览、临时热点追踪、主题化新闻搜索。
 
-### 3. [News Summarizer](./news-summarizer/SKILL.md)
-每日新闻聚合与翻译工具。
-- **功能**: 自动采集新西兰、国际及市场新闻，并支持针对用户指定主题执行深度搜索，提供中文摘要与链接。
+### 3. [NotebookLM Exporter](./notebooklm-exporter/SKILL.md)
+NotebookLM CLI 的稳定工作流封装。
+- 目标：管理 notebook、sources、artifacts，以及生成和下载导出内容。
+- 常见能力：检查环境、列 notebook/source、添加 source、生成 video/report/quiz 等 artifact、导出下载。
+- 依赖：`notebooklm-py`、Playwright Chromium、NotebookLM 登录态。
+- 入口脚本：`notebook_ops.sh`、`source_ops.sh`、`artifact_ops.sh`、`generate_and_download.sh`
 
 ### 4. [Stock Value Scanner](./stock-value-scanner/SKILL.md)
-股票价值投资分析与实时股价查询工具。
-- **功能**: 
-  - **价值分析**: 基于 Yahoo Finance (yfinance) 分析股票估值（P/B, P/E, ROE）。
-  - **趋势分析**: 分析历史高点回撤、52周幅度及长期均线趋势。
-  - **市场异动**: 实时查看美股涨幅榜、跌幅榜及热门交易股。
+面向美股的价值分析、趋势查看和市场异动扫描工具。
+- 价值分析：估值指标、ROE、净利率、综合评分。
+- 趋势分析：历史高点回撤、52 周区间、长期均线。
+- 市场异动：涨幅榜、跌幅榜、热门交易股。
+- 依赖：Python 库 `yfinance`
+- 入口脚本：
+  - `python3 stock-value-scanner/scripts/scanner.py`
+  - `python3 stock-value-scanner/scripts/stock_price.py`
+  - `python3 stock-value-scanner/scripts/market_movers.py`
 
-### 5. [Daily Press Scanner](./daily-press-scanner/SKILL.md)
-扫描多份当日报纸 PDF URL 的 OCR 索引工具，附带本地可执行扫描脚本。
-- **功能**:
-  - **快扫索引**: 对扫描报纸做页级 OCR 快扫，快速识别标题、首段和主题。
-  - **评论优先**: 优先找 `Opinion / Editorial / Analysis / Column / Review` 候选文章。
-  - **主题命中**: 按用户关心的话题输出结构化 JSON，如关税、AI、中国、Fed、中东等。
-- **运行要求**: 需要 `python3`、`pdftoppm`、`tesseract`，可选 `pypdf` 和 `Pillow`。
-- **执行方式**:
-   ```bash
-   python3 daily-press-scanner/scripts/scan.py --urls urls.txt --out-dir ./out --topics tariffs,ai --max-pages 8
-   ```
-- **主题参数**: 不传 `--topics` 时使用默认主题集；传入后只扫描指定主题。
+### 5. [Video Downloader](./video-downloader/SKILL.md)
+基于 `N_m3u8DL-RE` 的视频下载 skill。
+- 目标：从用户给定链接下载视频，并按指定名称保存。
+- 依赖：`nre` / `N_m3u8DL-RE`
+- 入口脚本：`bash video-downloader/scripts/download.sh`
 
-### 6. [Macro Market Report](./macro-market-report/SKILL.md)
-跨资产宏观市场报表工具。
-- **功能**:
-  - **一键快报**: 生成覆盖商品、股指、波动率、美元、美债和加密资产的中文市场报表。
-  - **关键变化**: 输出最新价格与 `1日 / 5日 / 1个月` 涨跌幅。
-  - **可扩展监控**: 支持通过 `--extra` 追加额外 ticker。
-- **运行要求**: 需要 `python3` 和 `yfinance`。
-- **执行方式**:
-   ```bash
-   python3 macro-market-report/scripts/market_report.py
-   ```
-
-## 目录结构
+## 仓库结构
 
 ```text
 .
 ├── README.md
-├── skill-writer/        # Skill 编写规范
+├── daily-press-scanner/
+│   ├── SKILL.md
+│   ├── configs/
+│   │   └── sources.example.json
+│   ├── scripts/
+│   │   ├── extract.py
+│   │   └── scan.py
+│   └── tests/
+├── news-summarizer/
 │   └── SKILL.md
-├── video-downloader/    # 视频下载工具
+├── notebooklm-exporter/
+│   ├── SKILL.md
+│   ├── agents/
+│   └── scripts/
+├── stock-value-scanner/
 │   ├── SKILL.md
 │   └── scripts/
-│       └── download.sh
-├── news-summarizer/     # 新闻摘要工具
-│   └── SKILL.md
-├── stock-value-scanner/ # 股票价值分析工具
+├── video-downloader/
 │   ├── SKILL.md
 │   └── scripts/
-│       ├── scanner.py
-│       ├── stock_price.py
-│       └── market_movers.py
-├── daily-press-scanner/ # 报纸 OCR 快扫与评论/热点索引工具
-│   ├── SKILL.md
-│   └── scripts/
-│       └── scan.py
-└── macro-market-report/ # 跨资产宏观市场报表工具
-    ├── SKILL.md
-    ├── scripts/
-    │   └── market_report.py
-    └── tests/
-        └── test_market_report.py
+├── docs/
+│   └── plans/
+├── notebooklm_downloads/
+└── translated-press-scanner/
 ```
 
-## 如何贡献
+## 使用建议
 
-如果你想添加新的 Skill，请参考 `skill-writer` 中的规范进行创建，并将其放置在独立的文件夹中。
+- 需要稳定的本地数据准备层：优先看 [Daily Press Scanner](./daily-press-scanner/SKILL.md)
+- 需要快速新闻摘要：优先看 [News Summarizer](./news-summarizer/SKILL.md)
+- 需要操作 NotebookLM：优先看 [NotebookLM Exporter](./notebooklm-exporter/SKILL.md)
+- 需要股票分析：优先看 [Stock Value Scanner](./stock-value-scanner/SKILL.md)
+- 需要下载媒体内容：优先看 [Video Downloader](./video-downloader/SKILL.md)
+
+## 维护原则
+
+- 每个 skill 的真实行为以对应目录下的 `SKILL.md` 为准。
+- 如果某个 skill 附带本地脚本，README 只描述主能力和入口，不重复全部实现细节。
+- 当脚本入口、依赖或输出 contract 变化时，优先同步对应的 `SKILL.md`，再回写根目录 `README.md`。
