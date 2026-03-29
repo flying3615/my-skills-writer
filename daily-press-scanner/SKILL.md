@@ -5,349 +5,143 @@ description: Use when processing translated Chinese newspaper PDF URLs into extr
 
 # Daily Press Scanner Skill
 
-这个 Skill 现在的主目标已经不是“对英文扫描报纸做 OCR 快扫”，而是处理一组**中文版机器翻译报纸 PDF**，优先利用 PDF 自带的中文文字层，生成：
+处理**中文版机器翻译报纸 PDF**，提取文字层并生成结构化摘要。
 
-- 可复用的页级文本产物
-- 结构化 `article_candidates`
-- 每份报纸 `5-10` 篇重点条目的本地 summary contract
+## 工作流程（两步走）
 
-它适合给后续 Codex 自动化当作每日输入准备层，不要求完美还原原版文章，也不默认追求跨页拼接。
-
-## 当前实现重点
-
-当前脚本已经支持这条主路径：
-
-1. 固定 URL 模板 + 日期展开
-2. 下载中文版 PDF
-3. 检测并提取文字层
-4. 写出页级 text artifacts
-5. 从页级中文文本生成 `article_candidates`
-6. 本地规则筛出每份报纸的重点条目
-7. 写出 `summary.json` / `summary.md`
-
-旧的 OCR 扫描能力仍然存在，但对 translated PDF 来说已经不是默认优化方向。
-
-## 可执行脚本
-
-```bash
-python3 daily-press-scanner/scripts/scan.py \
-  --source-config translated-press-scanner/configs/sources.example.json \
-  --out-dir ./out \
-  --run-date 2026-03-27
-```
-
-也仍然兼容旧的 `--urls` 输入：
+### 第一步：脚本提取（本地）
 
 ```bash
 python3 daily-press-scanner/scripts/scan.py \
   --urls urls.txt \
-  --out-dir ./out
+  --out-dir ./out \
+  --run-date 2026-03-28
 ```
+
+或使用 source-config：
+
+```bash
+python3 daily-press-scanner/scripts/scan.py \
+  --source-config daily-press-scanner/configs/sources.example.json \
+  --out-dir ./out \
+  --run-date 2026-03-28
+```
+
+脚本负责：
+1. 下载 PDF（支持 URL 模板 + 日期展开）
+2. 提取文字层（pdftotext 优先，PyMuPDF 自动 fallback）
+3. 写出页级文本文件到 `text/<paper_slug>/page-001.txt` ...
+4. 写出 `results.json`（含 paper 元信息、页索引、错误记录）
+
+### 第二步：AI 分析（必须）
+
+**脚本不负责文章识别和摘要——交给 AI。**
+
+脚本跑完后，AI agent 应该：
+
+1. 读取 `out/text/<paper_slug>/` 下所有 `page-*.txt` 文件
+2. 从全部页面中识别文章标题和页码
+3. 按重要性选出 **Top 10** 重点文章
+4. 对每篇重点文章写出 **3-5 句中文摘要**
+5. 列出其他值得关注的文章标题
+
+AI 分析结果写入 `out/summary.md`，格式：
+
+```markdown
+# 《报纸名》中文翻译版 每日摘要
+
+## 📰 报纸基本信息
+- 日期、总页数、版面分布
+
+## 🔥 Top 10 重点文章
+### 1. 文章标题
+**页码：** A1, A6
+摘要内容...
+
+## 📋 其他值得关注的文章
+| 标题 | 页码 |
+```
+
+### 用户点阅某篇文章时
+
+AI 回到 `text/<paper_slug>/page-XXX.txt` 读取该页完整文本，提取并呈现全文。
 
 ## 运行前提
 
-主流程必需：
-
+**必需：**
 - `python3`
-- `pdftotext`
-  这通常来自 `poppler`，也是当前 translated PDF 文字层提取的关键依赖。
+- `pymupdf`（`pip install pymupdf`）— 文字层提取的主力
 
-OCR fallback 可选：
-
-- `pdftoppm`
-  也通常来自 `poppler`，只在回退到旧 OCR 路径时需要。
-- `tesseract`
-  当前脚本里的 OCR 仍是英文模型路径，主要用于没有文字层的旧扫描流程。
-
-其他可选 Python 依赖：
-
-- `pypdf`
-- `Pillow`
+**可选（增强）：**
+- `pdftotext`（来自 `poppler`）— 如果可用，脚本会优先使用；不可用时自动 fallback 到 PyMuPDF
+- `pdftoppm` — OCR fallback，translated PDF 通常不需要
 
 ## 推荐输入方式
 
-推荐用 `--source-config`，因为这更适合每日自动化。
-
-示例配置：
+推荐用 `--source-config`，适合每日自动化：
 
 ```json
 {
   "sources": [
     {
-      "source_name": "New York Times",
-      "url_template": "https://dl.dengtazk.xin/%E3%80%90%E8%AF%91%E3%80%91%E7%BA%BD%E7%BA%A6%E6%97%B6%E6%8A%A5-{month}-{day}.pdf",
+      "source_name": "Wall Street Journal",
+      "url_template": "https://dl.dengtazk.xin/%E3%80%90%E8%AF%91%E3%80%91%E5%8D%8E%E5%B0%94%E8%A1%97%E6%97%A5%E6%8A%A5-{month}-{day}.pdf",
       "enabled": true
     }
   ]
 }
 ```
 
-支持的占位符：
-
-- `{month}`
-- `{day}`
-- `{year}`
-- `{date}`
-
-如果不传 `--run-date`，默认使用当天日期。
+占位符：`{year}` `{month}` `{day}` `{date}`
 
 ## 输出目录
 
-脚本会在 `--out-dir` 下写出：
-
 ```text
 out/
-  results.json
-  articles.json
-  summary.json
-  summary.md
-  daily_brief.json
-  pdfs/
-  text/
-  ocr/
-  previews/
+  results.json      # 脚本主产物：paper 元信息、页索引、错误
+  summary.md        # AI 生成的重点文章摘要（人类阅读）
+  pdfs/             # 下载的原始 PDF
+  text/             # 页级文字层文本
+    <paper_slug>/
+      page-001.txt
+      page-002.txt
+      ...
 ```
-
-重点产物说明：
-
-- `results.json`
-  - 主运行产物，包含 papers、page_index、errors、article candidates、summary contract
-- `articles.json`
-  - 给后续 AI 或自动化消费的完整文章库，是按需展开正文的主数据源
-- `summary.json`
-  - 每份报纸的重点条目摘要 contract
-- `summary.md`
-  - 人类直接阅读版
-- `daily_brief.json`
-  - 给每日 Codex 自动化消费的扁平摘要 payload
-- `text/`
-  - 成功提取的页级文字层文本，路径类似 `text/<paper_slug>/page-001.txt`
 
 ## 核心策略
 
-### 1. Text Layer First
+### Text Layer First
 
-对 translated PDF，优先跑 `pdftotext`。
+- 优先 `pdftotext`（如果系统已安装）
+- 自动 fallback 到 PyMuPDF（`pymupdf` Python 包）
+- OCR 仅在文字层完全不可用时作为最后手段
+- 对 translated PDF，文字层几乎总是可用的
 
-- 如果文字层可用，写出页级 `text_path`
-- 如果文字层是明显的中文译文内容，直接走 text-layer fast path，不再跑整页 render/OCR/review
-- 如果文字层不可用，记录 `text_layer_status` / `text_layer_reason`
-- OCR 只作为文字层不可用时的 fallback
+### 脚本只做提取，AI 做分析
 
-### 2. Article Candidates Before Summary
+脚本不再尝试用本地规则做文章分块/打分/摘要（效果差，版头被误识别为文章）。
 
-不要直接拿整份 PDF 做总结。
+**职责划分：**
+- **脚本**：下载 → 提取文字层 → 写页级文本 → 输出元数据
+- **AI**：读页级文本 → 识别文章 → 打分排序 → 写摘要
 
-先从每页中文文本生成 `article_candidates`，每条至少包含：
+### Browse First, Expand Later
 
-- `article_id`
-- `source_name`
-- `paper_id`
-- `url`
-- `page`
-- `title`
-- `title_guess`
-- `title_normalized`
-- `byline`
-- `body_text`
-- `section_guess`
-- `topic_tags`
-- `importance_hints`
-- `priority_score`
-- `lookup_keys`
-- `text_path`
-
-当前实现不是跨页文章重建，但也不再是“整页一条”的粗粒度模式：
-
-- 前 `10` 页会优先使用 `pdftotext -bbox-layout` 的 block 坐标做 article-like block extraction
-- 如果 bbox 提取不可用，才退回 text-line 分块
-- 第 `11-30` 页仍保留页级 fallback
-- 如果前页分块失败，会自动退回页级 candidate
-
-### 3. Browse First, Expand Later
-
-脚本当前不会调用远程 AI API。
-
-它会先用本地规则对 `article_candidates` 做排序和裁剪，保证每份报纸最终输出 `5-10` 条重点项，并写出：
-
-- `summary.json`
-- `summary.md`
-- `daily_brief.json`
-
-推荐的使用方式是：
-
-1. 先让 AI 读 `daily_brief.json`，返回重点文章摘要列表
-2. 用户点名某篇文章后，再让 AI 用 `article_id` 或 `page + title` 去 `articles.json` 回取完整正文
-
-这样后续 Codex 自动化或安装这个 skill 的 AI，不需要重新下载 PDF，也不需要自己做文章匹配。
+1. AI 读完所有页面后生成 Top 10 摘要
+2. 用户点名某篇 → AI 回到对应页面提取全文
+3. 不需要重新下载 PDF 或重新处理
 
 ## 何时使用
 
-适合这些场景：
-
 - 用户给了一组中文版报纸 PDF 链接
-- 用户想做每日自动化
-- 用户更关心“给 AI 一个干净输入”，而不是逐字忠实还原英文原版
-- 用户希望每份报纸得到 `5-10` 篇重点内容
-
-不适合这些场景：
-
-- 需要原文级校对
-- 需要完整跨页拼接文章
-- 需要生成最终发布稿件
-- 需要依赖 OCR 还原没有文字层的原始英文扫描件作为主流程
-
-## 当前处理流程
-
-### 1. Source Resolution
-
-- 读取 `--source-config` 或 `--urls`
-- 如果是 config，按日期展开 URL 模板
-- 保留 `source_name` 和原始 source metadata
-
-### 2. Download
-
-- 下载 PDF 到 `pdfs/`
-- 失败写入 `errors`
-- 单份报纸失败不影响整批
-
-### 3. Text Layer Extraction
-
-- 使用 `pdftotext`
-- 评估文字层是否可用
-- 成功时把每页文本写入 `text/`
-- 对中文译文文字层，直接从页级文本构建 `page_index`
-
-### 4. Candidate Generation
-
-- 从 `text_path` 读取页级文本
-- 去掉明显版头、日期、天气、价格、服务指南、音频/视频导流等 page furniture
-- 前 `10` 页优先按 bbox blocks 聚合标题、作者和正文块
-- bbox 不可用时，再按标题行、作者行、正文密度做 text-line 分块
-- 生成更接近文章粒度的 `article_candidates`
-
-### 5. Local Summary Contract
-
-- 对 candidates 打分
-- 每份报纸裁到最多 `10` 条
-- 写出 `summary.json`、`summary.md` 和 `daily_brief.json`
-
-## 主要字段
-
-### `paper`
-
-每份报纸的摘要元信息包含：
-
-- `source_name`
-- `paper_id`
-- `url`
-- `status`
-- `text_layer_status`
-- `text_layer_reason`
-- `text_layer_score`
-- `text_layer_dir`
-- `text_layer_page_count`
-- `article_count`
-- `scan_mode`
-
-### `page_index`
-
-页级索引仍然保留，尤其是为了兼容旧扫描流程。对 translated 路径，重点字段是：
-
-- `page`
-- `text_path`
-- `preview_path`
-- `ocr_path`
-
-### `article_candidates`
-
-这是后续自动化最应该优先消费的中间层。
-
-当前会额外带一些结构字段，便于本地排序：
-
-- `article_id`
-- `title`
-- `title_normalized`
-- `byline`
-- `block_index`
-- `block_kind`
-- `source_page_rank`
-- `priority_score`
-- `lookup_keys`
-
-### `summary.json`
-
-每份报纸大致形如：
-
-```json
-{
-  "run_date": "2026-03-27",
-  "papers": [
-    {
-      "source_name": "New York Times",
-      "paper_id": "nyt-2026-03-27",
-      "article_count": 14,
-      "selected_count": 8,
-      "selected_articles": [
-        {
-          "page": 1,
-          "title_guess": "战争冲击波引发滞胀阴影",
-          "summary_text": "..."
-        }
-      ]
-    }
-  ],
-  "articles": []
-}
-```
-
-### `daily_brief.json`
-
-这个文件是为了自动化消费而加的更扁平版本。每份报纸只保留：
-
-- `source_name`
-- `paper_id`
-- `selected_count`
-- `articles`
-
-每篇文章最少包含：
-
-- `article_id`
-- `page`
-- `title`
-- `byline`
-- `priority_score`
-- `summary_text`
-- `topic_tags`
-- `text_path`
-
-## 消费原则
-
-- 对 translated PDF，优先看 `daily_brief.json` 和 `articles.json`
-- 不要优先回退到 OCR 文本
-- 如果 `text_layer_status` 是 `available`，优先使用 `text_path`
-- 如果要接真正的 AI：
-  - 第一步读 `daily_brief.json` 做摘要浏览
-  - 第二步按 `article_id` 或 `page + title` 去 `articles.json` 拿完整 `body_text`
+- 用户想做每日自动化简报
+- 用户希望快速了解报纸重点内容
 
 ## 错误处理
 
-失败必须写进 `errors`：
-
-- 下载失败
-- `pdftotext` 不可用
-- 文字层为空
-- 文字层过稀疏
+失败写进 `results.json` 的 `errors` 数组：
+- 下载失败（SSL 问题等，脚本已内置 SSL fallback）
+- 文字层不可用
 - 页级处理失败
 
-错误按 paper 或 page 隔离，不影响整批运行。
-
-## 非目标
-
-当前版本默认不做：
-
-- 自动跨页拼接
-- 精确文章版面重建
-- 远程 AI 直接集成进脚本
-- 英文原文对齐
-- 以 OCR 为主的 translated PDF 流程
+单份报纸失败不影响整批。

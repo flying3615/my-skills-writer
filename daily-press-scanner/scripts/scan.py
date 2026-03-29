@@ -16,6 +16,7 @@ from datetime import date
 from pathlib import Path
 from typing import Iterable
 from urllib.parse import unquote, urlparse
+import ssl as _ssl
 from urllib.request import Request, urlopen
 
 try:
@@ -246,18 +247,34 @@ def score_text_layer_output(text: str) -> float:
     return round(min(1.0, score), 3)
 
 
+def _extract_text_with_pymupdf(pdf_path: Path) -> dict[str, object]:
+    """Fallback text extraction using PyMuPDF when pdftotext is unavailable."""
+    try:
+        import pymupdf
+        doc = pymupdf.open(str(pdf_path))
+        page_texts = []
+        for page in doc:
+            page_texts.append(page.get_text())
+        doc.close()
+        # Join with form-feed to match pdftotext page separation convention
+        raw_text = "\f".join(page_texts)
+        text = normalize_text(raw_text)
+        visible_chars = sum(1 for ch in text if not ch.isspace())
+        line_count = sum(1 for line in text.splitlines() if line.strip())
+        score = score_text_layer_output(text)
+        return {"status": "available", "reason": "pymupdf fallback", "score": score,
+                "char_count": visible_chars, "line_count": line_count, "text": text,
+                "raw_text": raw_text}
+    except Exception as exc:
+        return {"status": "unavailable", "reason": f"pymupdf failed: {exc}",
+                "score": 0.0, "char_count": 0, "line_count": 0, "text": ""}
+
+
 def extract_text_layer(pdf_path: Path) -> dict[str, object]:
     try:
         result = run_command(["pdftotext", "-layout", "-enc", "UTF-8", str(pdf_path), "-"])
     except FileNotFoundError:
-        return {
-            "status": "unavailable",
-            "reason": "pdftotext unavailable",
-            "score": 0.0,
-            "char_count": 0,
-            "line_count": 0,
-            "text": "",
-        }
+        return _extract_text_with_pymupdf(pdf_path)
     except subprocess.CalledProcessError as exc:
         return {
             "status": "unavailable",
@@ -415,7 +432,10 @@ def download_or_copy_source(source: str, dest: Path) -> tuple[Path | None, str |
         parsed = urlparse(source)
         if parsed.scheme in {"http", "https"}:
             request = Request(source, headers={"User-Agent": "Mozilla/5.0"})
-            with urlopen(request, timeout=60) as response, dest.open("wb") as handle:
+            ctx = _ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = _ssl.CERT_NONE
+            with urlopen(request, timeout=60, context=ctx) as response, dest.open("wb") as handle:
                 shutil.copyfileobj(response, handle)
             return dest, None
         if parsed.scheme == "file":
@@ -1153,12 +1173,36 @@ def extract_translated_article_blocks(text: str, *, page_number: int) -> list[di
     return blocks
 
 
+def _extract_bbox_blocks_pymupdf(pdf_path: Path) -> dict[int, list[dict[str, object]]]:
+    """Build page blocks from PyMuPDF when pdftotext bbox-layout is unavailable."""
+    try:
+        import pymupdf
+        doc = pymupdf.open(str(pdf_path))
+        pages: dict[int, list[dict[str, object]]] = {}
+        for page_num, page in enumerate(doc, start=1):
+            blocks_data = []
+            blocks = page.get_text("blocks")
+            for b in blocks:
+                x0, y0, x1, y1, text, *_ = b
+                text = text.strip()
+                if text:
+                    blocks_data.append({"text": text, "x_min": x0, "x_max": x1, "y_min": y0, "y_max": y1})
+            pages[page_num] = blocks_data
+        doc.close()
+        return pages
+    except Exception:
+        return {}
+
 def extract_bbox_page_blocks(pdf_path: Path) -> dict[int, list[dict[str, object]]]:
     namespace = {"x": "http://www.w3.org/1999/xhtml"}
     with tempfile.NamedTemporaryFile(prefix="daily-press-bbox-", suffix=".xml", delete=False) as handle:
         xml_path = Path(handle.name)
     try:
-        run_command(["pdftotext", "-bbox-layout", "-enc", "UTF-8", str(pdf_path), str(xml_path)])
+        try:
+            run_command(["pdftotext", "-bbox-layout", "-enc", "UTF-8", str(pdf_path), str(xml_path)])
+        except FileNotFoundError:
+            # pdftotext unavailable; build simple blocks from pymupdf text
+            return _extract_bbox_blocks_pymupdf(pdf_path)
         root = ET.fromstring(xml_path.read_text(encoding="utf-8", errors="replace"))
     finally:
         if xml_path.exists():
