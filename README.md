@@ -51,6 +51,13 @@ NotebookLM CLI 的稳定工作流封装。
 - `epub` 提取脚本：`python3 reading-vault-builder/scripts/extract_epub.py --epub ./book.epub --out-dir ./out/epub-text`
 - 适合场景：整理整本书、建立长期复习型笔记库、按章节阅读后再做跨章节回顾
 
+### 7. [Codebase Reference Vault](./codebase-reference-vault/SKILL.md)
+面向软件项目阅读的代码地图与参考库 skill。
+- 目标：把代码工程整理成英文的代码阅读 vault
+- 默认输出目录：`CodebaseVault/`；如果用户给项目名，则输出到 `<project_name>_vault/`
+- 核心内容：架构总览、模块笔记、关键流程、配置与命令、调试参考
+- 适合场景：阅读陌生仓库、梳理系统边界、追踪关键调用链、建立长期可查的工程参考库
+
 ## 仓库结构
 
 ```text
@@ -66,6 +73,9 @@ NotebookLM CLI 的稳定工作流封装。
 │   └── tests/
 ├── news-summarizer/
 │   └── SKILL.md
+├── codebase-reference-vault/
+│   ├── SKILL.md
+│   └── references/
 ├── reading-vault-builder/
 │   ├── SKILL.md
 │   ├── references/
@@ -91,6 +101,7 @@ NotebookLM CLI 的稳定工作流封装。
 
 - 需要稳定的本地数据准备层：优先看 [Daily Press Scanner](./daily-press-scanner/SKILL.md)
 - 需要快速新闻摘要：优先看 [News Summarizer](./news-summarizer/SKILL.md)
+- 需要把代码工程整理成可查阅的代码地图和参考库：优先看 [Codebase Reference Vault](./codebase-reference-vault/SKILL.md)
 - 需要整理书籍并生成 Obsidian 读书笔记库：优先看 [Reading Vault Builder](./reading-vault-builder/SKILL.md)
 - 需要操作 NotebookLM：优先看 [NotebookLM Exporter](./notebooklm-exporter/SKILL.md)
 - 需要股票分析：优先看 [Stock Value Scanner](./stock-value-scanner/SKILL.md)
