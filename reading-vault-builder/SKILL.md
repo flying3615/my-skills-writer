@@ -17,14 +17,6 @@ description: Use when turning a book, ebook, chapter set, PDF, epub, txt, md, or
 
 所有读取和输出都限制在 CWD 内。用户给外部路径时，要求先复制到当前目录。
 
-## 不要做的事
-
-- 不要切到 codebase / onboarding 模式
-- 不要把仓库结构当书籍结构
-- 不要在没有结构映射前直接写整本书总结
-- 不要伪造页码、引文或作者观点
-- 不要把轻量检查扩成考试题库
-
 ## 默认产物
 
 ```text

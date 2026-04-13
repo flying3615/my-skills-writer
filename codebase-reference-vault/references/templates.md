@@ -26,6 +26,8 @@ Suggested path: `<vault_root>/00-Overview/project-overview.md`
 ## Core Areas
 - [[Architecture Overview]]
 - [[Module Map]]
+- [[Flow Index]]
+- [[Architecture Graph]]
 - [[Primary Request Flow]]
 - [[Config And Commands]]
 - [[Debug Reference]]
@@ -39,7 +41,58 @@ Suggested path: `<vault_root>/00-Overview/project-overview.md`
 - 
 ```
 
-## 2. Architecture Overview
+## 2. Module Map
+
+Suggested path: `<vault_root>/00-Overview/module-map.md`
+
+```md
+# Module Map
+
+## Core Modules
+- [[Module: API]]
+- [[Module: Service Layer]]
+- [[Module: Persistence]]
+
+## Boundaries
+- inbound:
+- domain:
+- outbound:
+
+## Central Hubs
+- 
+
+## Peripheral Areas
+- 
+
+## Related Notes
+- [[Project Overview]]
+- [[Architecture Overview]]
+- [[Architecture Graph]]
+- [[Flow Index]]
+```
+
+## 3. Flow Index
+
+Suggested path: `<vault_root>/00-Overview/flow-index.md`
+
+```md
+# Flow Index
+
+## Primary Flows
+- [[Flow: Primary Request]]
+- [[Flow: Startup]]
+- [[Flow: Background Job]]
+
+## Notes
+- 
+
+## Related Notes
+- [[Project Overview]]
+- [[Module Map]]
+- [[Architecture Graph]]
+```
+
+## 4. Architecture Overview
 
 Suggested path: `<vault_root>/01-Architecture/architecture-overview.md`
 
@@ -69,10 +122,43 @@ Suggested path: `<vault_root>/01-Architecture/architecture-overview.md`
 ## Related Notes
 - [[Project Overview]]
 - [[Module Map]]
+- [[Flow Index]]
 - [[Primary Request Flow]]
 ```
 
-## 3. Module Note
+## 5. Architecture Graph
+
+Suggested path: `<vault_root>/01-Architecture/architecture-graph.md`
+
+````md
+# Architecture Graph
+
+```mermaid
+flowchart LR
+    Client["Client / Entry"]
+    API["API Layer"]
+    Service["Service Layer"]
+    Domain["Domain Logic"]
+    Store["Persistence"]
+    External["External Services"]
+
+    Client --> API
+    API --> Service
+    Service --> Domain
+    Domain --> Store
+    Service --> External
+```
+
+## Notes
+- 
+
+## Related Notes
+- [[Project Overview]]
+- [[Module Map]]
+- [[Architecture Overview]]
+````
+
+## 6. Module Note
 
 Suggested path: `<vault_root>/02-Modules/module-<name>.md`
 
@@ -96,6 +182,11 @@ Suggested path: `<vault_root>/02-Modules/module-<name>.md`
 - depends on:
 - used by:
 
+## Graph Links
+- upstream modules:
+- downstream modules:
+- related flows:
+
 ## Important Files
 - `path/to/file`: why it matters
 - `path/to/file`: why it matters
@@ -105,11 +196,12 @@ Suggested path: `<vault_root>/02-Modules/module-<name>.md`
 
 ## Related Notes
 - [[Architecture Overview]]
+- [[Module Map]]
 - [[Primary Request Flow]]
 - [[Config And Commands]]
 ```
 
-## 4. Flow Note
+## 7. Flow Note
 
 Suggested path: `<vault_root>/03-Flows/flow-<name>.md`
 
@@ -134,15 +226,23 @@ Suggested path: `<vault_root>/03-Flows/flow-<name>.md`
 - [[Module: A]]
 - [[Module: B]]
 
+## Crossed Boundaries
+- 
+
+## Entry And Exit
+- enters through:
+- exits through:
+
 ## Failure Points
 - 
 
 ## Related Notes
+- [[Flow Index]]
 - [[Architecture Overview]]
 - [[Debug Reference]]
 ```
 
-## 5. Config And Commands
+## 8. Config And Commands
 
 Suggested path: `<vault_root>/04-Config-And-Commands/config-and-commands.md`
 
@@ -169,10 +269,11 @@ Suggested path: `<vault_root>/04-Config-And-Commands/config-and-commands.md`
 
 ## Related Notes
 - [[Project Overview]]
+- [[Module Map]]
 - [[Debug Reference]]
 ```
 
-## 6. Debug Reference
+## 9. Debug Reference
 
 Suggested path: `<vault_root>/05-Debug-Reference/debug-reference.md`
 
@@ -197,6 +298,7 @@ Suggested path: `<vault_root>/05-Debug-Reference/debug-reference.md`
 
 ## Related Notes
 - [[Architecture Overview]]
+- [[Module Map]]
 - [[Primary Request Flow]]
 - [[Config And Commands]]
 ```

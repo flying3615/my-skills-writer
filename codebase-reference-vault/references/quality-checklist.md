@@ -15,6 +15,9 @@ Review this before delivery.
 - [ ] Architecture notes identify major layers or boundaries
 - [ ] Core modules and dependencies are mapped clearly
 - [ ] Important flows are traced from entry point to side effects
+- [ ] A dedicated `Module Map` page exists
+- [ ] A dedicated `Flow Index` page exists
+- [ ] A dedicated `Architecture Graph` page exists with a Mermaid graph
 
 ## 3. Reference Quality
 
@@ -22,6 +25,7 @@ Review this before delivery.
 - [ ] Flow notes name the actual files, modules, or commands involved
 - [ ] Config and command notes are practical and specific
 - [ ] Debug notes include real entry points for investigation
+- [ ] Core module pages are not collapsed into overly broad summaries
 
 ## 4. Navigation
 
@@ -29,6 +33,8 @@ Review this before delivery.
 - [ ] Module notes link to related flows or architecture notes
 - [ ] Flow notes link back to modules and debug references
 - [ ] The vault is easy to browse without re-reading the whole repository
+- [ ] The graph is hub-based rather than a flat pile of disconnected notes
+- [ ] Core module and flow pages have enough wikilinks to appear connected in Obsidian Graph View
 
 ## 5. Language And Terminology
 

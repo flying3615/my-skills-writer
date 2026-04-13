@@ -7,6 +7,8 @@ description: Use when reading an unfamiliar software project, mapping a codebase
 
 Turn a software project into an English code-reading vault. The goal is to build a map and a reference library at the same time: architecture, module boundaries, core flows, configuration, commands, and debugging notes.
 
+This vault should be optimized for **Obsidian Graph View**. Do not just write isolated summaries. Create dense, intentional links between overview pages, module pages, flow pages, config pages, and debug pages so the graph becomes a readable code map.
+
 Default rules:
 
 - default output language: English
@@ -34,6 +36,14 @@ Create this structure:
   04-Config-And-Commands/
   05-Debug-Reference/
 ```
+
+Required hub pages:
+
+- `00-Overview/project-overview.md`
+- `00-Overview/module-map.md`
+- `00-Overview/flow-index.md`
+- `01-Architecture/architecture-overview.md`
+- `01-Architecture/architecture-graph.md`
 
 ## Workflow
 
@@ -69,6 +79,11 @@ The code map should answer:
 - where persistence, API, worker, UI, or integration layers sit
 - which modules are central versus peripheral
 
+Write the map as both:
+
+- linked vault pages for Obsidian Graph View
+- a `Mermaid` graph page that shows major modules and boundaries
+
 ### 3. Expand Core Modules
 
 After the map is stable, document the important modules and directories.
@@ -84,6 +99,8 @@ For each core module, capture:
 
 Prefer module-level notes over file-by-file notes unless a specific file is unusually important.
 
+Every core module should become its own node in the vault. Avoid collapsing many unrelated modules into one page if that makes the graph unreadable.
+
 ### 4. Trace Important Flows
 
 Document the flows that matter most for reading the system:
@@ -96,6 +113,8 @@ Document the flows that matter most for reading the system:
 - sync or ingestion flow
 
 Trace from entry point to side effects. Name the files, modules, and boundaries involved.
+
+Every important flow should become its own page and link to every module page it crosses.
 
 ### 5. Capture Config, Commands, and Debug Paths
 
@@ -122,11 +141,29 @@ When the repo is large, prefer a strong map with selective deep dives over shall
 
 Use internal links so the vault is navigable:
 
-1. `00-Overview/` links to architecture, modules, flows, config, and debug sections
-2. architecture notes link to module pages
-3. module notes link to related flows and configs
-4. flow notes link back to the modules and entry points they use
-5. debug pages link to the modules or flows they help diagnose
+1. `project-overview.md` links to the module map, flow index, architecture overview, config notes, and debug notes
+2. `module-map.md` links to every core module page
+3. `flow-index.md` links to every important flow page
+4. architecture notes link to module pages and to `architecture-graph.md`
+5. every module page links to upstream modules, downstream modules, related flows, and relevant config/debug pages
+6. every flow page links back to the modules and entry points it uses
+7. debug pages link to the modules or flows they help diagnose
+
+Do not leave pages as isolated leaves unless they are intentionally peripheral.
+
+## Graph Policy
+
+The Obsidian graph should be useful without manual cleanup.
+
+To achieve that:
+
+- keep one note per core module
+- keep one note per important flow
+- create central hub pages instead of relying on a single overview note
+- use repeated links between related notes when the relationship matters
+- prefer stable note titles that match technical concepts from the codebase
+
+Also create one `Mermaid` graph page in `01-Architecture/architecture-graph.md` to visualize the high-level structure directly inside the vault.
 
 ## Naming and Language
 
