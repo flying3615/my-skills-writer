@@ -48,6 +48,7 @@ NotebookLM CLI 的稳定工作流封装。
 - 主输入：`PDF`、`epub`
 - 次输入：`txt`、`md`、`url`
 - 默认输出：中文章节笔记、主题索引、概念卡、引文页和轻量理解检查
+- `epub` 提取脚本：`python3 reading-vault-builder/scripts/extract_epub.py --epub ./book.epub --out-dir ./out/epub-text`
 - 适合场景：整理整本书、建立长期复习型笔记库、按章节阅读后再做跨章节回顾
 
 ## 仓库结构
@@ -67,7 +68,9 @@ NotebookLM CLI 的稳定工作流封装。
 │   └── SKILL.md
 ├── reading-vault-builder/
 │   ├── SKILL.md
-│   └── references/
+│   ├── references/
+│   ├── scripts/
+│   └── tests/
 ├── notebooklm-exporter/
 │   ├── SKILL.md
 │   ├── agents/
