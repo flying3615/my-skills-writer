@@ -46,6 +46,25 @@ ReadingVault/
 
 模板见 [references/templates.md](references/templates.md)。交付前按 [references/quality-checklist.md](references/quality-checklist.md) 自检。
 
+## 提取脚本
+
+处理 `epub` 时，优先先运行本地脚本：
+
+```bash
+python3 reading-vault-builder/scripts/extract_epub.py \
+  --epub "/path/to/book.epub" \
+  --out-dir "./out/epub-text"
+```
+
+默认输出：
+
+- `metadata.json`
+- `toc.json`
+- `chapters.json`
+- `chapters/*.txt`
+
+后续笔记整理优先基于这些抽取结果，而不是直接在压缩包里逐个猜章节。
+
 ## 工作流
 
 ### 1. Discover
@@ -73,7 +92,7 @@ ReadingVault/
 先拿到可读文本，再分析。
 
 - `PDF`：优先 `pdftotext`
-- `epub`：优先目录与章节 XHTML/HTML
+- `epub`：优先运行 `reading-vault-builder/scripts/extract_epub.py`
 - `txt` / `md`：直接读取
 - `url`：只提正文，不把导航、广告、评论区当正文
 
