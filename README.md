@@ -42,6 +42,14 @@ NotebookLM CLI 的稳定工作流封装。
 - 依赖：`nre` / `N_m3u8DL-RE`
 - 入口脚本：`bash video-downloader/scripts/download.sh`
 
+### 6. [Reading Vault Builder](./reading-vault-builder/SKILL.md)
+面向书籍阅读理解的读书笔记库 skill。
+- 目标：把书籍资料整理成 Obsidian 风格的 `ReadingVault/`
+- 主输入：`PDF`、`epub`
+- 次输入：`txt`、`md`、`url`
+- 默认输出：中文章节笔记、主题索引、概念卡、引文页和轻量理解检查
+- 适合场景：整理整本书、建立长期复习型笔记库、按章节阅读后再做跨章节回顾
+
 ## 仓库结构
 
 ```text
@@ -57,6 +65,9 @@ NotebookLM CLI 的稳定工作流封装。
 │   └── tests/
 ├── news-summarizer/
 │   └── SKILL.md
+├── reading-vault-builder/
+│   ├── SKILL.md
+│   └── references/
 ├── notebooklm-exporter/
 │   ├── SKILL.md
 │   ├── agents/
@@ -77,6 +88,7 @@ NotebookLM CLI 的稳定工作流封装。
 
 - 需要稳定的本地数据准备层：优先看 [Daily Press Scanner](./daily-press-scanner/SKILL.md)
 - 需要快速新闻摘要：优先看 [News Summarizer](./news-summarizer/SKILL.md)
+- 需要整理书籍并生成 Obsidian 读书笔记库：优先看 [Reading Vault Builder](./reading-vault-builder/SKILL.md)
 - 需要操作 NotebookLM：优先看 [NotebookLM Exporter](./notebooklm-exporter/SKILL.md)
 - 需要股票分析：优先看 [Stock Value Scanner](./stock-value-scanner/SKILL.md)
 - 需要下载媒体内容：优先看 [Video Downloader](./video-downloader/SKILL.md)
