@@ -58,6 +58,13 @@ NotebookLM CLI 的稳定工作流封装。
 - 核心内容：架构总览、模块笔记、关键流程、配置与命令、调试参考
 - 适合场景：阅读陌生仓库、梳理系统边界、追踪关键调用链、建立长期可查的工程参考库
 
+### 8. [WeRead Text Downloader](./weread-text-downloader/SKILL.md)
+面向微信读书内容导出的章节文本下载 skill。
+- 目标：把已购买的微信读书书籍导出成适合 AI 阅读的章节文本
+- 核心命令：`python3 weread-text-downloader/scripts/weread_text.py download "Book Name"`
+- 默认输出：`metadata.json`、`toc.json`、`chapters/*.txt`
+- 适合场景：为后续 AI 摘要、问答、索引、读书笔记准备干净的章节文本输入
+
 ## 仓库结构
 
 ```text
@@ -73,6 +80,10 @@ NotebookLM CLI 的稳定工作流封装。
 │   └── tests/
 ├── news-summarizer/
 │   └── SKILL.md
+├── weread-text-downloader/
+│   ├── SKILL.md
+│   ├── scripts/
+│   └── tests/
 ├── codebase-reference-vault/
 │   ├── SKILL.md
 │   └── references/
@@ -101,6 +112,7 @@ NotebookLM CLI 的稳定工作流封装。
 
 - 需要稳定的本地数据准备层：优先看 [Daily Press Scanner](./daily-press-scanner/SKILL.md)
 - 需要快速新闻摘要：优先看 [News Summarizer](./news-summarizer/SKILL.md)
+- 需要把微信读书书籍导出成章节文本供 AI 阅读：优先看 [WeRead Text Downloader](./weread-text-downloader/SKILL.md)
 - 需要把代码工程整理成可查阅的代码地图和参考库：优先看 [Codebase Reference Vault](./codebase-reference-vault/SKILL.md)
 - 需要整理书籍并生成 Obsidian 读书笔记库：优先看 [Reading Vault Builder](./reading-vault-builder/SKILL.md)
 - 需要操作 NotebookLM：优先看 [NotebookLM Exporter](./notebooklm-exporter/SKILL.md)
